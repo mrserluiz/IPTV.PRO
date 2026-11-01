@@ -11,6 +11,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Reflection;
+using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
 public class Entry {
@@ -30,7 +31,7 @@ public class XCIPTVPC : Form {
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
  public XCIPTVPC(){
-  Text="XCIPTV-PC — Windows • prévia 0.1.5"; Width=1100;Height=740;MinimumSize=new Size(850,600);
+  Text="XCIPTV-PC — Windows • prévia 0.1.6"; Width=1100;Height=740;MinimumSize=new Size(850,600);
   DoubleBuffered=true;AutoScaleMode=AutoScaleMode.Dpi;StartPosition=FormStartPosition.CenterScreen;
   BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
   using(var iconStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon")){if(iconStream!=null)Icon=new Icon(iconStream);}
@@ -41,7 +42,7 @@ public class XCIPTVPC : Form {
   var header=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(8,38,79)};
   header.Controls.Add(new PictureBox(){Image=logoImage,SizeMode=PictureBoxSizeMode.Zoom,Location=new Point(14,8),Size=new Size(62,62)});
   header.Controls.Add(new Label(){Text="XCIPTV-PC",AutoSize=true,Font=new Font("Segoe UI",20,FontStyle.Regular),Location=new Point(90,15),ForeColor=Color.White});
-  var leave=new Button(){Text="Sair da conta",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White};leave.Click+=(sender,eventArgs)=>{host=null;password=null;pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();};header.Controls.Add(leave);root.Controls.Add(header);
+  var leave=new Button(){Text="Sair da conta",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White};leave.Click+=(sender,eventArgs)=>{host=null;password=null;pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();};header.Controls.Add(leave);var configureVlc=new Button(){Text="Configurar VLC",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White,BackColor=Color.FromArgb(3,31,61)};configureVlc.Click+=(sender,eventArgs)=>SelectVlc();header.Controls.Add(configureVlc);root.Controls.Add(header);
   var filters=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=3};foreach(float width in new[]{22f,35f,43f})filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,width));
   mode.Items.AddRange(new object[]{"TV ao vivo","Filmes","Séries","Favoritos (lista atual)"});mode.SelectedIndex=0;mode.DropDownStyle=category.DropDownStyle=ComboBoxStyle.DropDownList;mode.Dock=category.Dock=search.Dock=DockStyle.Fill;
   filters.Controls.Add(mode);filters.Controls.Add(category);filters.Controls.Add(search);root.Controls.Add(filters);
@@ -54,7 +55,7 @@ public class XCIPTVPC : Form {
   m3u.Click+=async(s,e)=>await ImportM3u();
   BuildLogin();BuildLoading();ShowLogin();Resize+=(sender,eventArgs)=>CenterScreens();Shown+=(sender,eventArgs)=>CenterScreens();
   Directory.CreateDirectory(dataDir);var fav=Path.Combine(dataDir,"favorites.txt");if(File.Exists(fav))favorites=new HashSet<string>(File.ReadAllLines(fav));
-  vlc=new[]{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"VideoLAN","VLC","vlc.exe"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"VideoLAN","VLC","vlc.exe")}.FirstOrDefault(File.Exists);
+  LoadPreferences();vlc=FindVlc(vlc);FormClosing+=(sender,eventArgs)=>SavePreferences();
  }
  static Image Asset(string name){using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(stream==null)throw new InvalidOperationException("Recurso visual ausente: "+name);using(var image=Image.FromStream(stream))return new Bitmap(image);}}
  Panel Field(TextBox input,string placeholder,int symbol,bool reveal){
@@ -103,11 +104,28 @@ public class XCIPTVPC : Form {
   loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();PerformLayout();using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"loading.png"));}
   loadingScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();PerformLayout();using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"catalog.png"));}
  }
+ static string PreferencesJson(string address,string name,string player){return new JavaScriptSerializer().Serialize(new Dictionary<string,string>{{"server",address??""},{"username",name??""},{"vlcPath",player??""}});}
+ void LoadPreferences(){try{string path=Path.Combine(dataDir,"preferences.json");if(!File.Exists(path))return;var saved=Dict(new JavaScriptSerializer().DeserializeObject(File.ReadAllText(path)));server.Text=Get(saved,"server");user.Text=Get(saved,"username");vlc=Get(saved,"vlcPath");}catch{loginStatus.Text="Não foi possível carregar as preferências. Preencha os dados novamente.";}}
+ void SavePreferences(){try{Directory.CreateDirectory(dataDir);File.WriteAllText(Path.Combine(dataDir,"preferences.json"),PreferencesJson(server.Text.Trim(),user.Text.Trim(),vlc));}catch{status.Text="Não foi possível salvar as preferências neste computador.";}}
+ static string FindVlc(string previous){
+  if(!string.IsNullOrWhiteSpace(previous)&&File.Exists(previous))return previous;
+  foreach(var view in new[]{RegistryView.Registry64,RegistryView.Registry32})foreach(var hive in new[]{RegistryHive.LocalMachine,RegistryHive.CurrentUser}){
+   try{using(var root=RegistryKey.OpenBaseKey(hive,view)){
+    using(var key=root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\vlc.exe")){if(key!=null){string candidate=Convert.ToString(key.GetValue("")).Trim('"');if(File.Exists(candidate))return candidate;}}
+    using(var key=root.OpenSubKey(@"SOFTWARE\VideoLAN\VLC")){if(key!=null){string folder=Convert.ToString(key.GetValue("InstallDir"));if(!string.IsNullOrEmpty(folder)){string candidate=Path.Combine(folder,"vlc.exe");if(File.Exists(candidate))return candidate;}}}
+   }}catch{}
+  }
+  return new[]{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"VideoLAN","VLC","vlc.exe"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"VideoLAN","VLC","vlc.exe")}.FirstOrDefault(File.Exists);
+ }
+ bool SelectVlc(){using(var dialog=new OpenFileDialog(){Title="Selecione o vlc.exe da instalação atual",Filter="VLC Media Player (vlc.exe)|vlc.exe",CheckFileExists=true}){
+  if(dialog.ShowDialog()!=DialogResult.OK)return false;if(!string.Equals(Path.GetFileName(dialog.FileName),"vlc.exe",StringComparison.OrdinalIgnoreCase)){MessageBox.Show("Selecione o arquivo vlc.exe.");return false;}
+  vlc=dialog.FileName;SavePreferences();status.Text="VLC configurado. Selecione um vídeo e clique em Reproduzir.";return true;
+ }}
  string Esc(string value){return Uri.EscapeDataString(value??"");}
  string Api(string action){return host+"/player_api.php?username="+Esc(username)+"&password="+Esc(password)+(action==""?"":"&action="+action);}
  async Task<object> Fetch(string url){
   return await Task.Run(()=>{
-   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.5";
+   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.6";
    req.Accept="application/json, text/plain, */*";req.AutomaticDecompression=DecompressionMethods.GZip|DecompressionMethods.Deflate;
    try{using(var response=(HttpWebResponse)req.GetResponse())using(var stream=response.GetResponseStream())using(var reader=new StreamReader(stream)){
     string body=reader.ReadToEnd();return ParseResponse(body);
@@ -152,6 +170,9 @@ public class XCIPTVPC : Form {
   string state=Get(info,"status","Active");if(!state.Equals("Active",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("A autenticação respondeu, mas a conta não está ativa. Verifique a situação com o provedor.");return info;
  }
  static void SelfTest(){
+  string preferences=PreferencesJson("https://example.invalid","test-user",@"C:\VideoLAN\VLC\vlc.exe");var saved=Dict(new JavaScriptSerializer().DeserializeObject(preferences));if(saved.Count!=3||Get(saved,"username")!="test-user"||saved.ContainsKey("password"))throw new Exception("Preferences roundtrip failed");
+  string temporary=Path.GetTempFileName();try{if(FindVlc(temporary)!=temporary)throw new Exception("Saved player path was not reused");}finally{File.Delete(temporary);}
+
   var ok=ParseResponse("{\"user_info\":{\"auth\":1,\"status\":\"Active\"}}");ValidateLogin(ok);
   ValidateLogin(ParseResponse("{\"user_info\":{\"auth\":true,\"status\":\"active\"}}"));
   if(Rows(ParseResponse("[]")).Count()!=0)throw new Exception("Array parse failed");
@@ -167,7 +188,7 @@ public class XCIPTVPC : Form {
  void Busy(bool value,string text){busy=value;login.Enabled=mode.Enabled=play.Enabled=guide.Enabled=back.Enabled=m3u.Enabled=!value;status.Text=text;if(loginStatus!=null)loginStatus.Text=text;if(loadingStatus!=null)loadingStatus.Text=text;server.Enabled=user.Enabled=pass.Enabled=!value;}
  async Task Connect(){if(busy)return;Uri uri;if(!Uri.TryCreate(server.Text.Trim(),UriKind.Absolute,out uri)||(uri.Scheme!="https"&&uri.Scheme!="http")||!string.IsNullOrEmpty(uri.UserInfo)||!string.IsNullOrEmpty(uri.Query)){MessageBox.Show("Informe somente o endereço do servidor, incluindo http:// ou https://.");return;}
   host=server.Text.Trim().TrimEnd('/');if(host.EndsWith("/player_api.php",StringComparison.OrdinalIgnoreCase))host=host.Substring(0,host.Length-15);username=user.Text.Trim();password=pass.Text;Busy(true,"Verificando conta…");
-  try{ValidateLogin(await Fetch(Api("")));loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();CenterScreens();SetLoading(0,"Carregando…");Busy(false,"Atualizando canais ao vivo…");await LoadList();loadingScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();AcceptButton=null;}
+  try{ValidateLogin(await Fetch(Api("")));SavePreferences();loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();CenterScreens();SetLoading(0,"Carregando…");Busy(false,"Atualizando canais ao vivo…");await LoadList();loadingScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();AcceptButton=null;}
   catch(Exception ex){host=null;Busy(false,"Falha ao conectar. Confira a mensagem abaixo.");ShowLogin();ShowError(ex);}
  }
  void ShowError(Exception ex){MessageBox.Show(ex is WebException?NetworkFailure((WebException)ex):ex.Message,"XCIPTV-PC",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
@@ -180,9 +201,13 @@ public class XCIPTVPC : Form {
  string Key(Entry e){return (e.Url??host)+"|"+kind+"|"+e.Id;}
  void ToggleFavorite(){var e=items.SelectedItem as Entry;if(e==null)return;string key=Key(e);if(!favorites.Add(key))favorites.Remove(key);File.WriteAllLines(Path.Combine(dataDir,"favorites.txt"),favorites);status.Text=favorites.Contains(key)?"Adicionado aos favoritos.":"Removido dos favoritos.";if(mode.SelectedIndex==3)Filter();}
  async void Play(){if(busy)return;var e=items.SelectedItem as Entry;if(e==null)return;if(kind=="series"&&!episodes){await LoadEpisodes(e);return;}
-  if(vlc==null){using(var dialog=new OpenFileDialog(){Title="Selecione vlc.exe",Filter="VLC|vlc.exe"}){if(dialog.ShowDialog()!=DialogResult.OK)return;vlc=dialog.FileName;}}
+  vlc=FindVlc(vlc);if(vlc==null&&!SelectVlc())return;
   var url=e.Url??host+"/"+(kind=="vod"?"movie":kind)+"/"+Esc(username)+"/"+Esc(password)+"/"+Esc(e.Id)+"."+Esc(e.Extension);
-  try{Process.Start(new ProcessStartInfo(vlc,"--no-one-instance --play-and-exit \""+url.Replace("\"","%22")+"\""){UseShellExecute=false});status.Text="Reprodução aberta no VLC: "+e.Name;}catch{MessageBox.Show("Não foi possível iniciar o VLC.");}
+  try{var start=new ProcessStartInfo(vlc,"--no-one-instance --play-and-exit \""+url.Replace("\"","%22")+"\""){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(vlc)};
+   Process.Start(start);status.Text="Reprodução aberta no VLC: "+e.Name;
+  }catch(System.ComponentModel.Win32Exception ex){vlc=null;MessageBox.Show("O Windows não conseguiu iniciar o VLC (código "+ex.NativeErrorCode+"). Clique em Configurar VLC e selecione o vlc.exe da instalação atual.","XCIPTV-PC",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+  catch{MessageBox.Show("Não foi possível iniciar o VLC. Use Configurar VLC para selecionar o executável atual.","XCIPTV-PC",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+
  }
  async Task LoadEpisodes(Entry series){Busy(true,"Carregando episódios…");try{var result=Dict(await Fetch(Api("get_series_info&series_id="+Esc(series.Id))));object raw;if(!result.TryGetValue("episodes",out raw))throw new Exception("O servidor não retornou episódios.");var list=new List<Entry>();foreach(var season in Dict(raw)){foreach(var value in Rows(season.Value)){var d=Dict(value);list.Add(new Entry(){Name="T"+season.Key+" · "+Get(d,"episode_num")+" · "+Get(d,"title"),Id=Get(d,"id"),Extension=Get(d,"container_extension","mp4")});}}entries=list;episodes=true;search.Clear();Filter();Busy(false,list.Count+" episódios de "+series.Name);}catch(Exception ex){Busy(false,"Falha ao carregar episódios.");ShowError(ex);}}
  static string Decode(string s){try{return Encoding.UTF8.GetString(Convert.FromBase64String(s));}catch{return s;}}
@@ -198,5 +223,6 @@ public class XCIPTVPC : Form {
  }
  [STAThread]public static void Main(string[] args){if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch{Environment.Exit(1);}}));Application.Run(window);}
 }
+
 
 

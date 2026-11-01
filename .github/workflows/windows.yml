@@ -24,9 +24,14 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           if (!(Test-Path $compiler)) { throw 'C# compiler not found' }
-          & $compiler /nologo /codepage:65001 /target:winexe /win32icon:assets/app.ico /resource:assets/logo.png,Logo /resource:assets/background.jpg,Background /resource:assets/app.ico,AppIcon /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll XCIPTV-PC.cs
+          & $compiler /nologo /codepage:65001 /target:winexe /win32icon:assets/app.ico /resource:assets/logo.png,Logo /resource:assets/background.jpg,Background /resource:assets/app.ico,AppIcon /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll /reference:System.Security.dll XCIPTV-PC.cs EmbeddedVlc.cs
           if ($LASTEXITCODE -ne 0) { throw 'C# compilation failed' }
           Copy-Item LEIA-ME.md,ANALISE_TECNICA.md dist
+      - name: Install VLC for local media verification
+        shell: pwsh
+        run: |
+          choco install vlc --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'VLC installation failed' }
       - name: Check protocol diagnostics and start native interface
         shell: pwsh
         run: |
@@ -38,6 +43,9 @@ jobs:
           $p = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--smoke-test' -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Interface initialization timeout' }
           if ($p.ExitCode -ne 0) { throw "Interface initialization failed: $($p.ExitCode)" }
+          $media = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--player-test' -PassThru
+          if (!$media.WaitForExit(45000)) { $media.Kill(); throw 'Internal media test timed out' }
+          if ($media.ExitCode -ne 0) { throw 'Internal LibVLC local media playback failed' }
           Get-FileHash dist/XCIPTV-PC.exe -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -59,4 +67,5 @@ jobs:
           Compress-Archive -Path dist/* -DestinationPath XCIPTV-PC-Windows.zip
           gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Prévia nativa compilada no Windows. Requer VLC instalado. Compilação e inicialização da interface verificadas; login e reprodução dependem de teste com seu provedor. Não possui todos os recursos do XCIPTV.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }
+
 

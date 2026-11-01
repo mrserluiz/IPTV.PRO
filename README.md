@@ -1,25 +1,23 @@
 # XCIPTV-PC para Windows
 
-Cliente independente em C# para serviços Xtream e listas M3U locais, sem afiliação com o XCIPTV oficial.
+Cliente independente para Xtream e M3U, sem afiliação com o aplicativo XCIPTV oficial.
 
-## Download
+## Novidades: login automático e player interno
 
-[Baixar XCIPTV-PC.exe v0.1.3](https://github.com/mrserluiz/IPTV.PRO/releases/download/v0.1.3/XCIPTV-PC.exe)
+Após um login válido, a opção **Lembrar senha e entrar automaticamente** guarda os dados de acesso criptografados pela DPAPI do Windows, vinculados ao usuário atual. Ao abrir novamente, o programa tenta entrar uma vez. Em caso de falha, a tela de login permanece disponível. Desmarque a opção ou use **Sair da conta** para remover o login salvo.
 
-[Versões disponíveis](https://github.com/mrserluiz/IPTV.PRO/releases)
+O player usa o motor LibVLC 3 da instalação do VLC, exibindo o vídeo dentro do XCIPTV-PC. Inclui pausa/continuação, parar, volume, busca quando a mídia permite e tela cheia com saída por Escape. O VLC 3.x deve ter a mesma arquitetura do executável (normalmente 64 bits). Em caso de falha ao carregar o motor, o aplicativo oferece abertura no VLC externo. Instalar o VLC continua sendo necessário; suas bibliotecas não estão embutidas neste executável.
 
-Abra o executável no Windows. Requer .NET Framework 4.5 ou posterior (preferencialmente 4.8) e VLC instalado. A reprodução abre em uma janela separada do VLC.
+[Baixar versões](https://github.com/mrserluiz/IPTV.PRO/releases)
 
-## Recursos e validação
+## Validação
 
-Login Xtream, categorias, canais, filmes, episódios, busca, favoritos, programação curta e importação M3U local. Inclui diagnóstico de DNS, conexão, TLS, HTTP e resposta da API. O workflow verifica compilação, tratamento de respostas e inicialização da interface. O acesso e a reprodução com seu provedor ainda precisam de teste.
+O workflow Windows compila o programa, verifica a criptografia, o tratamento de respostas e o layout. Também instala VLC e testa vídeo AVI sintético local: associação da janela, saída de vídeo, avanço do tempo, pausa e parada. A reprodução do seu provedor precisa ser confirmada no seu computador.
 
-Não possui todos os recursos do XCIPTV: ainda faltam player incorporado, gravação, multitelas, XMLTV completo, catch-up e controle parental.
+## Recursos
 
-O nome do aplicativo e do executável passou de EtherPlayer para XCIPTV-PC. Os favoritos continuam na pasta de dados anterior para preservar as preferências existentes. O repositório permanece em mrserluiz/IPTV.PRO.
-
-Consulte [LEIA-ME.md](LEIA-ME.md) e [ANALISE_TECNICA.md](ANALISE_TECNICA.md).
+Canais, filmes, séries, categorias, favoritos, busca, EPG curto e M3U local. Ainda não implementa gravação, multitelas, XMLTV completo, catch-up e controle parental.
 
 ## Compilar
 
-Execute Compilar.cmd ou use Actions → Windows EXE → Run workflow. Não coloque credenciais no código ou no repositório.
+Execute Compilar.cmd ou use Actions → Windows EXE. Requer .NET Framework 4.5+ (preferencialmente 4.8) e VLC 3.x. Não coloque dados de acesso no repositório.

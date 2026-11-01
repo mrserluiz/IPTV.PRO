@@ -2,7 +2,11 @@
 
 Cliente independente para Xtream e M3U, sem afiliação com o aplicativo XCIPTV oficial.
 
-## Novidades: login automático e player interno
+## Novidades: navegação e Início
+
+A tela Início reúne TV ao vivo, guia da TV, filmes e séries. O botão com desenho de casa retorna ao Início a partir do login, carregamento, listas e player (inclusive em tela cheia). Voltar ao Início para a reprodução. As listas possuem categorias laterais, contagem, busca e grade de logos/capas com cache limitado. O carregamento mostra o resultado de cada catálogo; o EPG curto é consultado ao escolher um canal.
+
+## Login automático e player interno
 
 Após um login válido, a opção **Lembrar senha e entrar automaticamente** guarda os dados de acesso criptografados pela DPAPI do Windows, vinculados ao usuário atual. Ao abrir novamente, o programa tenta entrar uma vez. Em caso de falha, a tela de login permanece disponível. Desmarque a opção ou use **Sair da conta** para remover o login salvo.
 
@@ -21,3 +25,4 @@ Canais, filmes, séries, categorias, favoritos, busca, EPG curto e M3U local. Ai
 ## Compilar
 
 Execute Compilar.cmd ou use Actions → Windows EXE. Requer .NET Framework 4.5+ (preferencialmente 4.8) e VLC 3.x. Não coloque dados de acesso no repositório.
+

@@ -23,14 +23,17 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           if (!(Test-Path $compiler)) { throw 'C# compiler not found' }
-          & $compiler /nologo /target:winexe /platform:anycpu /out:dist/EtherPlayer.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll EtherPlayer.cs
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /out:dist/EtherPlayer.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll EtherPlayer.cs
           if ($LASTEXITCODE -ne 0) { throw 'C# compilation failed' }
           Copy-Item LEIA-ME.md,ANALISE_TECNICA.md dist
-      - name: Check executable and start native interface
+      - name: Check protocol diagnostics and start native interface
         shell: pwsh
         run: |
           $bytes = [IO.File]::ReadAllBytes((Resolve-Path dist/EtherPlayer.exe))
           if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Invalid PE executable' }
+          $test = Start-Process (Resolve-Path dist/EtherPlayer.exe) -ArgumentList '--self-test' -PassThru
+          if (!$test.WaitForExit(30000)) { $test.Kill(); throw 'Protocol tests timed out' }
+          if ($test.ExitCode -ne 0) { throw 'Protocol diagnostics tests failed' }
           $p = Start-Process (Resolve-Path dist/EtherPlayer.exe) -ArgumentList '--smoke-test' -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Interface initialization timeout' }
           if ($p.ExitCode -ne 0) { throw "Interface initialization failed: $($p.ExitCode)" }

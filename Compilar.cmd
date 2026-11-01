@@ -7,11 +7,11 @@ if not exist "%CSC%" (
  pause
  exit /b 1
 )
-"%CSC%" /nologo /target:winexe /out:EtherPlayer.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll EtherPlayer.cs
+"%CSC%" /nologo /target:winexe /out:XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll XCIPTV-PC.cs
 if errorlevel 1 (
  echo Falha na compilacao. Envie uma captura desta janela.
  pause
  exit /b 1
 )
-echo Compilacao concluida. Abrindo EtherPlayer.exe...
-start "" EtherPlayer.exe
+echo Compilacao concluida. Abrindo XCIPTV-PC.exe...
+start "" XCIPTV-PC.exe

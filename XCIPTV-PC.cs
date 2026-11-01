@@ -15,7 +15,7 @@ public class Entry {
  public string Name, Id, Extension, Url, Category;
  public override string ToString(){return Name;}
 }
-public class EtherPlayer : Form {
+public class XCIPTVPC : Form {
  TextBox server=new TextBox(),user=new TextBox(),pass=new TextBox(),search=new TextBox();
  ComboBox mode=new ComboBox(),category=new ComboBox(); ListBox items=new ListBox();
  Button login=new Button(),play=new Button(),back=new Button(),star=new Button(),guide=new Button(),m3u=new Button();
@@ -24,8 +24,8 @@ public class EtherPlayer : Form {
  JavaScriptSerializer json=new JavaScriptSerializer(){MaxJsonLength=int.MaxValue};
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
- public EtherPlayer(){
-  Text="EtherPlayer — Windows • prévia 0.1.2"; Width=1100;Height=740;MinimumSize=new Size(850,600);
+ public XCIPTVPC(){
+  Text="XCIPTV-PC — Windows • prévia 0.1.3"; Width=1100;Height=740;MinimumSize=new Size(850,600);
   BackColor=Color.FromArgb(22,26,35);ForeColor=Color.White;Font=new Font("Segoe UI",10);
   var root=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,Padding=new Padding(16)};
   root.RowStyles.Add(new RowStyle(SizeType.Absolute,85));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));root.RowStyles.Add(new RowStyle(SizeType.Absolute,32));Controls.Add(root);
@@ -50,7 +50,7 @@ public class EtherPlayer : Form {
  string Api(string action){return host+"/player_api.php?username="+Esc(username)+"&password="+Esc(password)+(action==""?"":"&action="+action);}
  async Task<object> Fetch(string url){
   return await Task.Run(()=>{
-   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="EtherPlayer/0.1.2";
+   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.3";
    req.Accept="application/json, text/plain, */*";req.AutomaticDecompression=DecompressionMethods.GZip|DecompressionMethods.Deflate;
    try{using(var response=(HttpWebResponse)req.GetResponse())using(var stream=response.GetResponseStream())using(var reader=new StreamReader(stream)){
     string body=reader.ReadToEnd();return ParseResponse(body);
@@ -113,7 +113,7 @@ public class EtherPlayer : Form {
   try{ValidateLogin(await Fetch(Api("")));Busy(false,"Conectado.");await LoadList();}
   catch(Exception ex){host=null;Busy(false,"Falha ao conectar.");ShowError(ex);}
  }
- void ShowError(Exception ex){MessageBox.Show(ex is WebException?NetworkFailure((WebException)ex):ex.Message,"EtherPlayer",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+ void ShowError(Exception ex){MessageBox.Show(ex is WebException?NetworkFailure((WebException)ex):ex.Message,"XCIPTV-PC",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
  async Task LoadList(){if(busy||host==null)return;Busy(true,"Carregando catálogo…");episodes=false;kind=mode.SelectedIndex==1?"vod":mode.SelectedIndex==2?"series":"live";
   try{var cats=Rows(await Fetch(Api("get_"+kind+"_categories"))).Select(Dict).ToList();var rows=Rows(await Fetch(Api(kind=="series"?"get_series":"get_"+kind+"_streams")));entries=rows.Select(x=>{var d=Dict(x);return new Entry(){Name=Get(d,"name"),Id=Get(d,kind=="series"?"series_id":"stream_id"),Extension=Get(d,"container_extension",kind=="live"?"ts":"mp4"),Category=Get(d,"category_id")};}).ToList();
    category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});foreach(var cat in cats)category.Items.Add(new Entry(){Name=Get(cat,"category_name"),Id=Get(cat,"category_id")});category.SelectedIndex=0;Filter();Busy(false,entries.Count+" itens. Digite no campo à direita para buscar.");}
@@ -139,6 +139,6 @@ public class EtherPlayer : Form {
    }catch(Exception ex){Busy(false,"Falha ao importar lista.");ShowError(ex);}
   }
  }
- [STAThread]public static void Main(string[] args){if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new EtherPlayer();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>window.Close()));Application.Run(window);}
+ [STAThread]public static void Main(string[] args){if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>window.Close()));Application.Run(window);}
 }
 

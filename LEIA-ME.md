@@ -1,11 +1,11 @@
-# EtherPlayer — prévia nativa para Windows 0.1
+# XCIPTV-PC — prévia nativa para Windows 0.1.3
 
 Este pacote contém uma análise estática do XCIPTV 7.0 enviado pelo usuário e uma implementação independente em C# / Windows Forms. Não é o XCIPTV oficial nem uma conversão integral do aplicativo Android.
 
 ## Executar
 
 1. Extraia este ZIP para uma pasta no computador.
-2. Se `EtherPlayer.exe` estiver incluído, abra esse arquivo. Caso contrário, execute `Compilar.cmd`: ele procura o compilador do .NET Framework instalado no Windows, gera o executável e abre o programa.
+2. Se `XCIPTV-PC.exe` estiver incluído, abra esse arquivo. Caso contrário, execute `Compilar.cmd`: ele procura o compilador do .NET Framework instalado no Windows, gera o executável e abre o programa.
 3. Informe o endereço base do seu servidor, usuário e senha do seu provedor Xtream. Não use a URL de um canal no campo servidor.
 4. Escolha TV ao vivo, Filmes ou Séries. Selecione uma categoria e use o campo à direita para buscar.
 5. Dê dois cliques em um canal, filme ou episódio. O vídeo abre em uma janela separada do VLC instalado.

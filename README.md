@@ -1,27 +1,25 @@
-# EtherPlayer para Windows
+# XCIPTV-PC para Windows
 
-Cliente nativo em C# para serviços Xtream e listas M3U locais. Prévia independente, sem afiliação com XCIPTV.
+Cliente independente em C# para serviços Xtream e listas M3U locais, sem afiliação com o XCIPTV oficial.
 
 ## Download
 
-[Baixar EtherPlayer.exe v0.1.1](https://github.com/mrserluiz/IPTV.PRO/releases/download/v0.1.1/EtherPlayer.exe)
+[Baixar XCIPTV-PC.exe v0.1.3](https://github.com/mrserluiz/IPTV.PRO/releases/download/v0.1.3/XCIPTV-PC.exe)
 
 [Versões disponíveis](https://github.com/mrserluiz/IPTV.PRO/releases)
 
-Abra o executável diretamente no Windows. Requer .NET Framework 4.5 ou posterior (preferencialmente 4.8) e VLC instalado. Se necessário, selecione o caminho de vlc.exe quando solicitado.
+Abra o executável no Windows. Requer .NET Framework 4.5 ou posterior (preferencialmente 4.8) e VLC instalado. A reprodução abre em uma janela separada do VLC.
 
-## Estado verificado
+## Recursos e validação
 
-A versão v0.1.1 foi compilada em um runner Windows do GitHub Actions. A inicialização da interface passou no teste automatizado `--smoke-test`. Login real, catálogos e reprodução com provedor IPTV ainda não foram testados.
+Login Xtream, categorias, canais, filmes, episódios, busca, favoritos, programação curta e importação M3U local. Inclui diagnóstico de DNS, conexão, TLS, HTTP e resposta da API. O workflow verifica compilação, tratamento de respostas e inicialização da interface. O acesso e a reprodução com seu provedor ainda precisam de teste.
 
-## Recursos
+Não possui todos os recursos do XCIPTV: ainda faltam player incorporado, gravação, multitelas, XMLTV completo, catch-up e controle parental.
 
-Login Xtream, categorias, TV ao vivo, filmes, episódios de séries, busca, favoritos de lista, EPG curto e importação local simplificada de M3U. A reprodução abre no VLC em janela separada.
-
-Ainda não há player incorporado, gravação, multitelas, XMLTV completo, catch-up e controle parental. Esta versão não tem paridade completa com o XCIPTV.
+O nome do aplicativo e do executável passou de EtherPlayer para XCIPTV-PC. Os favoritos continuam na pasta de dados anterior para preservar as preferências existentes. O repositório permanece em mrserluiz/IPTV.PRO.
 
 Consulte [LEIA-ME.md](LEIA-ME.md) e [ANALISE_TECNICA.md](ANALISE_TECNICA.md).
 
 ## Compilar
 
-Execute `Compilar.cmd` no Windows ou use a aba Actions → Windows EXE → Run workflow. Cada compilação de main publica uma prévia após compilar e testar a abertura da interface. Não coloque credenciais do provedor no código ou no repositório.
+Execute Compilar.cmd ou use Actions → Windows EXE → Run workflow. Não coloque credenciais no código ou no repositório.

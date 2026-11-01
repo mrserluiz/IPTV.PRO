@@ -6,6 +6,7 @@ on:
       - '**.cs'
       - '.github/workflows/windows.yml'
       - 'LEIA-ME.md'
+      - 'assets/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           if (!(Test-Path $compiler)) { throw 'C# compiler not found' }
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll XCIPTV-PC.cs
+          & $compiler /nologo /codepage:65001 /target:winexe /win32icon:assets/app.ico /resource:assets/logo.png,Logo /resource:assets/background.jpg,Background /resource:assets/app.ico,AppIcon /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll XCIPTV-PC.cs
           if ($LASTEXITCODE -ne 0) { throw 'C# compilation failed' }
           Copy-Item LEIA-ME.md,ANALISE_TECNICA.md dist
       - name: Check protocol diagnostics and start native interface
@@ -43,6 +44,11 @@ jobs:
           name: XCIPTV-PC-Windows
           path: dist/*
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Interface-previews
+          path: dist/ui-previews/*.png
+          if-no-files-found: error
       - name: Publish downloadable preview
         if: github.ref == 'refs/heads/main'
         shell: pwsh
@@ -53,3 +59,4 @@ jobs:
           Compress-Archive -Path dist/* -DestinationPath XCIPTV-PC-Windows.zip
           gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Prévia nativa compilada no Windows. Requer VLC instalado. Compilação e inicialização da interface verificadas; login e reprodução dependem de teste com seu provedor. Não possui todos os recursos do XCIPTV.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }
+

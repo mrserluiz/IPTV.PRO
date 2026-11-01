@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Drawing;
+using System.Reflection;
+using System.Runtime.InteropServices;
 
 public class Entry {
  public string Name, Id, Extension, Url, Category;
@@ -20,19 +22,26 @@ public class XCIPTVPC : Form {
  ComboBox mode=new ComboBox(),category=new ComboBox(); ListBox items=new ListBox();
  Button login=new Button(),play=new Button(),back=new Button(),star=new Button(),guide=new Button(),m3u=new Button();
  Label status=new Label(); List<Entry> entries=new List<Entry>();
+ Panel loginScreen,loadingScreen;TableLayoutPanel catalog;Label loginStatus,loadingStatus;Label[] loadingStages;
+ Image logoImage;
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr hWnd,int msg,IntPtr wParam,string lParam);
  string host,username,password,kind="live",vlc; bool busy=false,episodes=false;
  JavaScriptSerializer json=new JavaScriptSerializer(){MaxJsonLength=int.MaxValue};
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
  public XCIPTVPC(){
-  Text="XCIPTV-PC — Windows • prévia 0.1.3"; Width=1100;Height=740;MinimumSize=new Size(850,600);
-  BackColor=Color.FromArgb(22,26,35);ForeColor=Color.White;Font=new Font("Segoe UI",10);
+  Text="XCIPTV-PC — Windows • prévia 0.1.4"; Width=1100;Height=740;MinimumSize=new Size(850,600);
+  DoubleBuffered=true;AutoScaleMode=AutoScaleMode.Dpi;StartPosition=FormStartPosition.CenterScreen;
+  BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
+  using(var iconStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon")){if(iconStream!=null)Icon=new Icon(iconStream);}
+  BackColor=Color.FromArgb(12,65,140);ForeColor=Color.White;Font=new Font("Segoe UI",10);
   var root=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,Padding=new Padding(16)};
   root.RowStyles.Add(new RowStyle(SizeType.Absolute,85));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));root.RowStyles.Add(new RowStyle(SizeType.Absolute,32));Controls.Add(root);
-  var auth=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=4,RowCount=2};
-  foreach(var text in new[]{"Servidor (http:// ou https://)","Usuário","Senha","Conexão"})auth.Controls.Add(new Label(){Text=text,AutoSize=true});
-  server.Dock=user.Dock=pass.Dock=DockStyle.Fill;pass.UseSystemPasswordChar=true;login.Text="Conectar";login.Dock=DockStyle.Fill;
-  auth.Controls.Add(server);auth.Controls.Add(user);auth.Controls.Add(pass);auth.Controls.Add(login);for(int i=0;i<4;i++)auth.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,i==0?40:20));root.Controls.Add(auth);
+  catalog=root;root.BackColor=Color.Transparent;
+  var header=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(8,38,79)};
+  header.Controls.Add(new PictureBox(){Image=logoImage,SizeMode=PictureBoxSizeMode.Zoom,Location=new Point(14,8),Size=new Size(62,62)});
+  header.Controls.Add(new Label(){Text="XCIPTV-PC",AutoSize=true,Font=new Font("Segoe UI",20,FontStyle.Regular),Location=new Point(90,15),ForeColor=Color.White});
+  var leave=new Button(){Text="Sair da conta",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White};leave.Click+=(sender,eventArgs)=>{host=null;password=null;pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();};header.Controls.Add(leave);root.Controls.Add(header);
   var filters=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=3};foreach(float width in new[]{22f,35f,43f})filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,width));
   mode.Items.AddRange(new object[]{"TV ao vivo","Filmes","Séries","Favoritos (lista atual)"});mode.SelectedIndex=0;mode.DropDownStyle=category.DropDownStyle=ComboBoxStyle.DropDownList;mode.Dock=category.Dock=search.Dock=DockStyle.Fill;
   filters.Controls.Add(mode);filters.Controls.Add(category);filters.Controls.Add(search);root.Controls.Add(filters);
@@ -43,14 +52,61 @@ public class XCIPTVPC : Form {
   search.TextChanged+=(s,e)=>Filter();category.SelectedIndexChanged+=(s,e)=>Filter();play.Click+=(s,e)=>Play();items.DoubleClick+=(s,e)=>Play();
   back.Click+=async(s,e)=>await LoadList();star.Click+=(s,e)=>ToggleFavorite();guide.Click+=async(s,e)=>await Guide();
   m3u.Click+=async(s,e)=>await ImportM3u();
+  BuildLogin();BuildLoading();ShowLogin();Resize+=(sender,eventArgs)=>CenterScreens();Shown+=(sender,eventArgs)=>CenterScreens();
   Directory.CreateDirectory(dataDir);var fav=Path.Combine(dataDir,"favorites.txt");if(File.Exists(fav))favorites=new HashSet<string>(File.ReadAllLines(fav));
   vlc=new[]{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"VideoLAN","VLC","vlc.exe"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"VideoLAN","VLC","vlc.exe")}.FirstOrDefault(File.Exists);
+ }
+ static Image Asset(string name){using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(stream==null)throw new InvalidOperationException("Recurso visual ausente: "+name);using(var image=Image.FromStream(stream))return new Bitmap(image);}}
+ Panel Field(TextBox input,string placeholder,int symbol,bool reveal){
+  var panel=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(207,234,243),Margin=new Padding(0,3,0,3),Padding=new Padding(58,15,reveal?84:16,10)};
+  input.BorderStyle=BorderStyle.None;input.BackColor=panel.BackColor;input.ForeColor=Color.FromArgb(16,53,77);input.Font=new Font("Segoe UI",15);input.Dock=DockStyle.Fill;input.AccessibleName=placeholder;input.HandleCreated+=(sender,eventArgs)=>SendMessage(input.Handle,0x1501,new IntPtr(1),placeholder);panel.Controls.Add(input);
+  panel.Paint+=(sender,eventArgs)=>{var g=eventArgs.Graphics;g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;using(var pen=new Pen(Color.FromArgb(33,67,89),1.4f)){
+   if(symbol==0){g.DrawRectangle(pen,16,15,25,10);g.DrawRectangle(pen,16,29,25,10);g.DrawLine(pen,20,20,29,20);g.DrawLine(pen,20,34,29,34);g.DrawEllipse(pen,35,19,2,2);g.DrawEllipse(pen,35,33,2,2);}
+   else if(symbol==1){g.DrawEllipse(pen,23,10,17,17);g.DrawArc(pen,15,28,33,28,180,180);g.DrawLine(pen,15,42,48,42);}
+   else {g.DrawArc(pen,23,10,17,24,180,180);g.DrawRectangle(pen,17,23,29,24);}
+  }};
+  if(reveal){var toggle=new Button(){Text="Mostrar",Width=77,Dock=DockStyle.Right,FlatStyle=FlatStyle.Flat,TabStop=false,ForeColor=Color.FromArgb(16,53,77),Font=new Font("Segoe UI",9)};toggle.FlatAppearance.BorderSize=0;panel.Padding=new Padding(58,12,4,10);input.UseSystemPasswordChar=true;toggle.Click+=(sender,eventArgs)=>{input.UseSystemPasswordChar=!input.UseSystemPasswordChar;toggle.Text=input.UseSystemPasswordChar?"Mostrar":"Ocultar";};panel.Controls.Add(toggle);toggle.BringToFront();}
+  return panel;
+ }
+ void BuildLogin(){
+  loginScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent};Controls.Add(loginScreen);
+  var card=new TableLayoutPanel(){Size=new Size(470,510),ColumnCount=1,RowCount=9,BackColor=Color.Transparent};
+  foreach(int height in new[]{130,38,62,62,62,62,36,36,22})card.RowStyles.Add(new RowStyle(SizeType.Absolute,height));card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+  card.Controls.Add(new PictureBox(){Image=logoImage,Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,Margin=new Padding(0,0,0,12)},0,0);
+  card.Controls.Add(new Label(){Text="XTREAM CODES COMPATIBLE API",Font=new Font("Segoe UI Light",16),ForeColor=Color.White,TextAlign=ContentAlignment.MiddleCenter,Dock=DockStyle.Fill},0,1);
+  card.Controls.Add(Field(server,"URL do servidor Xtream",0,false),0,2);card.Controls.Add(Field(user,"Nome de usuário",1,false),0,3);card.Controls.Add(Field(pass,"Senha",2,true),0,4);
+  login.Text="ENTRAR";login.Font=new Font("Segoe UI",19);login.Dock=DockStyle.Fill;login.Margin=new Padding(0,9,0,0);login.BackColor=Color.FromArgb(3,31,61);login.ForeColor=Color.White;login.FlatStyle=FlatStyle.Flat;login.FlatAppearance.BorderColor=Color.FromArgb(75,157,224);card.Controls.Add(login,0,5);
+  loginStatus=new Label(){Text="Informe os dados do seu provedor",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,ForeColor=Color.White,Font=new Font("Segoe UI",9)};card.Controls.Add(loginStatus,0,6);
+  var local=new LinkLabel(){Text="Abrir lista M3U local",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,LinkColor=Color.White,ActiveLinkColor=Color.LightCyan};local.LinkClicked+=async(sender,eventArgs)=>{await ImportM3u();if(entries.Count>0){loginScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();AcceptButton=null;}};card.Controls.Add(local,0,7);
+  card.Controls.Add(new Label(){Text="XCIPTV-PC • Cliente independente para Windows",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,ForeColor=Color.FromArgb(197,224,246),Font=new Font("Segoe UI",8)},0,8);
+  loginScreen.Controls.Add(card);loginScreen.Resize+=(sender,eventArgs)=>{card.Width=Math.Min(470,Math.Max(300,loginScreen.ClientSize.Width-48));card.Left=(loginScreen.ClientSize.Width-card.Width)/2;card.Top=Math.Max(8,(loginScreen.ClientSize.Height-card.Height)/2);};
+ }
+ void CenterScreens(){foreach(var panel in new[]{loginScreen,loadingScreen}){if(panel==null||panel.Controls.Count==0)continue;var card=panel.Controls[0];card.Width=Math.Min(panel==loginScreen?470:680,Math.Max(300,panel.ClientSize.Width-48));card.Left=Math.Max(0,(panel.ClientSize.Width-card.Width)/2);card.Top=Math.Max(8,(panel.ClientSize.Height-card.Height)/2);}}
+ void ShowLogin(){catalog.Visible=false;if(loadingScreen!=null)loadingScreen.Visible=false;loginScreen.Visible=true;loginScreen.BringToFront();CenterScreens();AcceptButton=login;}
+ void BuildLoading(){
+  loadingScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(loadingScreen);
+  var card=new TableLayoutPanel(){Size=new Size(680,240),ColumnCount=1,RowCount=5,BackColor=Color.Transparent};foreach(int height in new[]{44,78,24,42,42})card.RowStyles.Add(new RowStyle(SizeType.Absolute,height));card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+  card.Controls.Add(new Label(){Text="Atualizando conteúdo de mídia",BackColor=Color.FromArgb(237,243,249),ForeColor=Color.FromArgb(20,50,80),Font=new Font("Segoe UI Light",17),TextAlign=ContentAlignment.MiddleCenter,Dock=DockStyle.Fill});
+  var stages=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=4,RowCount=1,Margin=new Padding(0)};loadingStages=new Label[4];string[] names={"TV AO VIVO","FILMES","SÉRIES","GUIA DE TV"};for(int i=0;i<4;i++){stages.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));loadingStages[i]=new Label(){Text=names[i]+"\n"+(i==0?"Aguardando…":"Ao abrir a seção"),Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(6,34,64),ForeColor=Color.White,Margin=new Padding(1,0,1,0),Font=new Font("Segoe UI",11)};stages.Controls.Add(loadingStages[i]);}card.Controls.Add(stages);
+  card.Controls.Add(new ProgressBar(){Style=ProgressBarStyle.Marquee,MarqueeAnimationSpeed=24,Dock=DockStyle.Fill,Margin=new Padding(0,8,0,4)});
+  loadingStatus=new Label(){Text="Carregando canais ao vivo…",TextAlign=ContentAlignment.MiddleCenter,Dock=DockStyle.Fill,ForeColor=Color.White};card.Controls.Add(loadingStatus);
+  card.Controls.Add(new Label(){Text="Filmes, séries e programação são carregados ao abrir a seção.",TextAlign=ContentAlignment.MiddleCenter,Dock=DockStyle.Fill,ForeColor=Color.FromArgb(202,230,250),BackColor=Color.FromArgb(6,34,64),Font=new Font("Segoe UI",9)});
+  loadingScreen.Controls.Add(card);loadingScreen.Resize+=(sender,eventArgs)=>{card.Width=Math.Min(680,loadingScreen.ClientSize.Width-48);card.Left=(loadingScreen.ClientSize.Width-card.Width)/2;card.Top=(loadingScreen.ClientSize.Height-card.Height)/2;};
+ }
+ void SetLoading(int index,string text){string[] names={"TV AO VIVO","FILMES","SÉRIES","GUIA DE TV"};loadingStages[index].Text=names[index]+"\n"+text;}
+ void CheckLayout(){CenterScreens();
+  if(!loginScreen.Visible||catalog.Visible||!loginScreen.Bounds.Contains(loginScreen.Controls[0].Bounds))throw new Exception("Login layout is outside the window");
+  foreach(Control input in new Control[]{server,user,pass,login}){if(!input.Visible||input.Width<100||input.Height<15)throw new Exception("Login control is not usable");}
+  string dir=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews");Directory.CreateDirectory(dir);
+  using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"login.png"));}
+  loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();PerformLayout();using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"loading.png"));}
+  loadingScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();PerformLayout();using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"catalog.png"));}
  }
  string Esc(string value){return Uri.EscapeDataString(value??"");}
  string Api(string action){return host+"/player_api.php?username="+Esc(username)+"&password="+Esc(password)+(action==""?"":"&action="+action);}
  async Task<object> Fetch(string url){
   return await Task.Run(()=>{
-   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.3";
+   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.4";
    req.Accept="application/json, text/plain, */*";req.AutomaticDecompression=DecompressionMethods.GZip|DecompressionMethods.Deflate;
    try{using(var response=(HttpWebResponse)req.GetResponse())using(var stream=response.GetResponseStream())using(var reader=new StreamReader(stream)){
     string body=reader.ReadToEnd();return ParseResponse(body);
@@ -107,17 +163,17 @@ public class XCIPTVPC : Form {
  static Dictionary<string,object> Dict(object o){return o as Dictionary<string,object>??new Dictionary<string,object>();}
  static string Get(Dictionary<string,object>d,string key,string fallback=""){object v;return d.TryGetValue(key,out v)&&v!=null?Convert.ToString(v):fallback;}
  static IEnumerable<object> Rows(object o){return (o as object[])??new object[0];}
- void Busy(bool value,string text){busy=value;login.Enabled=mode.Enabled=play.Enabled=guide.Enabled=back.Enabled=m3u.Enabled=!value;status.Text=text;}
+ void Busy(bool value,string text){busy=value;login.Enabled=mode.Enabled=play.Enabled=guide.Enabled=back.Enabled=m3u.Enabled=!value;status.Text=text;if(loginStatus!=null)loginStatus.Text=text;if(loadingStatus!=null)loadingStatus.Text=text;server.Enabled=user.Enabled=pass.Enabled=!value;}
  async Task Connect(){if(busy)return;Uri uri;if(!Uri.TryCreate(server.Text.Trim(),UriKind.Absolute,out uri)||(uri.Scheme!="https"&&uri.Scheme!="http")||!string.IsNullOrEmpty(uri.UserInfo)||!string.IsNullOrEmpty(uri.Query)){MessageBox.Show("Informe somente o endereço do servidor, incluindo http:// ou https://.");return;}
   host=server.Text.Trim().TrimEnd('/');if(host.EndsWith("/player_api.php",StringComparison.OrdinalIgnoreCase))host=host.Substring(0,host.Length-15);username=user.Text.Trim();password=pass.Text;Busy(true,"Verificando conta…");
-  try{ValidateLogin(await Fetch(Api("")));Busy(false,"Conectado.");await LoadList();}
-  catch(Exception ex){host=null;Busy(false,"Falha ao conectar.");ShowError(ex);}
+  try{ValidateLogin(await Fetch(Api("")));loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();CenterScreens();SetLoading(0,"Carregando…");Busy(false,"Atualizando canais ao vivo…");await LoadList();loadingScreen.Visible=false;catalog.Visible=true;catalog.BringToFront();AcceptButton=null;}
+  catch(Exception ex){host=null;Busy(false,"Falha ao conectar. Confira a mensagem abaixo.");ShowLogin();ShowError(ex);}
  }
  void ShowError(Exception ex){MessageBox.Show(ex is WebException?NetworkFailure((WebException)ex):ex.Message,"XCIPTV-PC",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
  async Task LoadList(){if(busy||host==null)return;Busy(true,"Carregando catálogo…");episodes=false;kind=mode.SelectedIndex==1?"vod":mode.SelectedIndex==2?"series":"live";
   try{var cats=Rows(await Fetch(Api("get_"+kind+"_categories"))).Select(Dict).ToList();var rows=Rows(await Fetch(Api(kind=="series"?"get_series":"get_"+kind+"_streams")));entries=rows.Select(x=>{var d=Dict(x);return new Entry(){Name=Get(d,"name"),Id=Get(d,kind=="series"?"series_id":"stream_id"),Extension=Get(d,"container_extension",kind=="live"?"ts":"mp4"),Category=Get(d,"category_id")};}).ToList();
-   category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});foreach(var cat in cats)category.Items.Add(new Entry(){Name=Get(cat,"category_name"),Id=Get(cat,"category_id")});category.SelectedIndex=0;Filter();Busy(false,entries.Count+" itens. Digite no campo à direita para buscar.");}
-  catch(Exception ex){Busy(false,"Não foi possível carregar o catálogo.");ShowError(ex);}
+   category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});foreach(var cat in cats)category.Items.Add(new Entry(){Name=Get(cat,"category_name"),Id=Get(cat,"category_id")});category.SelectedIndex=0;Filter();if(loadingScreen!=null&&loadingScreen.Visible)SetLoading(0,"Concluído");Busy(false,entries.Count+" itens. Digite no campo à direita para buscar.");}
+  catch(Exception ex){if(loadingScreen!=null&&loadingScreen.Visible)SetLoading(0,"Falhou");Busy(false,"Não foi possível carregar o catálogo.");ShowError(ex);}
  }
  void Filter(){var cat=category.SelectedItem as Entry;items.BeginUpdate();items.Items.Clear();foreach(var e in entries){if(e.Name.IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)<0)continue;if(!episodes&&cat!=null&&cat.Id!=""&&e.Category!=cat.Id)continue;if(mode.SelectedIndex==3&&!favorites.Contains(Key(e)))continue;items.Items.Add(e);}items.EndUpdate();}
  string Key(Entry e){return (e.Url??host)+"|"+kind+"|"+e.Id;}
@@ -139,6 +195,7 @@ public class XCIPTVPC : Form {
    }catch(Exception ex){Busy(false,"Falha ao importar lista.");ShowError(ex);}
   }
  }
- [STAThread]public static void Main(string[] args){if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>window.Close()));Application.Run(window);}
+ [STAThread]public static void Main(string[] args){if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch{Environment.Exit(1);}}));Application.Run(window);}
 }
+
 

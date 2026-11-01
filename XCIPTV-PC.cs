@@ -30,7 +30,7 @@ public class XCIPTVPC : Form {
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
  public XCIPTVPC(){
-  Text="XCIPTV-PC — Windows • prévia 0.1.4"; Width=1100;Height=740;MinimumSize=new Size(850,600);
+  Text="XCIPTV-PC — Windows • prévia 0.1.5"; Width=1100;Height=740;MinimumSize=new Size(850,600);
   DoubleBuffered=true;AutoScaleMode=AutoScaleMode.Dpi;StartPosition=FormStartPosition.CenterScreen;
   BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
   using(var iconStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon")){if(iconStream!=null)Icon=new Icon(iconStream);}
@@ -46,7 +46,7 @@ public class XCIPTVPC : Form {
   mode.Items.AddRange(new object[]{"TV ao vivo","Filmes","Séries","Favoritos (lista atual)"});mode.SelectedIndex=0;mode.DropDownStyle=category.DropDownStyle=ComboBoxStyle.DropDownList;mode.Dock=category.Dock=search.Dock=DockStyle.Fill;
   filters.Controls.Add(mode);filters.Controls.Add(category);filters.Controls.Add(search);root.Controls.Add(filters);
   items.Dock=DockStyle.Fill;items.BackColor=Color.FromArgb(30,36,48);items.ForeColor=Color.White;items.BorderStyle=BorderStyle.None;items.HorizontalScrollbar=true;root.Controls.Add(items);
-  var actions=new FlowLayoutPanel(){Dock=DockStyle.Fill};play.Text="▶ Reproduzir";star.Text="☆ Favorito";guide.Text="Programação";back.Text="Voltar às séries";back.Width=155;play.Width=140;guide.Width=140;m3u.Text="Abrir M3U";m3u.Width=120;foreach(Button button in new[]{play,star,guide,back,m3u}){button.AutoSize=true;button.MinimumSize=new Size(110,32);}actions.Controls.AddRange(new Control[]{play,star,guide,back,m3u});root.Controls.Add(actions);
+  var actions=new FlowLayoutPanel(){Dock=DockStyle.Fill};play.Text="▶ Reproduzir";star.Text="☆ Favorito";guide.Text="Programação";back.Text="Voltar às séries";back.Width=155;play.Width=140;guide.Width=140;m3u.Text="Abrir M3U";m3u.Width=120;foreach(Button button in new[]{play,star,guide,back,m3u}){button.AutoSize=true;button.MinimumSize=new Size(110,32);button.BackColor=Color.FromArgb(3,31,61);button.ForeColor=Color.White;button.FlatStyle=FlatStyle.Flat;button.FlatAppearance.BorderColor=Color.FromArgb(75,157,224);}actions.Controls.AddRange(new Control[]{play,star,guide,back,m3u});root.Controls.Add(actions);
   status.Dock=DockStyle.Fill;root.Controls.Add(status);status.Text="Informe os dados do seu provedor. A senha não será salva.";
   login.Click+=async(s,e)=>await Connect();mode.SelectedIndexChanged+=async(s,e)=>{if(mode.SelectedIndex==3){Filter();return;}if(host!=null)await LoadList();};
   search.TextChanged+=(s,e)=>Filter();category.SelectedIndexChanged+=(s,e)=>Filter();play.Click+=(s,e)=>Play();items.DoubleClick+=(s,e)=>Play();
@@ -59,13 +59,13 @@ public class XCIPTVPC : Form {
  static Image Asset(string name){using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(stream==null)throw new InvalidOperationException("Recurso visual ausente: "+name);using(var image=Image.FromStream(stream))return new Bitmap(image);}}
  Panel Field(TextBox input,string placeholder,int symbol,bool reveal){
   var panel=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(207,234,243),Margin=new Padding(0,3,0,3),Padding=new Padding(58,15,reveal?84:16,10)};
-  input.BorderStyle=BorderStyle.None;input.BackColor=panel.BackColor;input.ForeColor=Color.FromArgb(16,53,77);input.Font=new Font("Segoe UI",15);input.Dock=DockStyle.Fill;input.AccessibleName=placeholder;input.HandleCreated+=(sender,eventArgs)=>SendMessage(input.Handle,0x1501,new IntPtr(1),placeholder);panel.Controls.Add(input);
+  input.BorderStyle=BorderStyle.None;input.BackColor=panel.BackColor;input.ForeColor=Color.FromArgb(16,53,77);input.Font=new Font("Segoe UI",15);input.Dock=DockStyle.None;panel.Resize+=(sender,eventArgs)=>input.SetBounds(58,Math.Max(8,(panel.ClientSize.Height-input.PreferredHeight)/2),Math.Max(100,panel.ClientSize.Width-58-(reveal?88:16)),input.PreferredHeight);input.AccessibleName=placeholder;input.HandleCreated+=(sender,eventArgs)=>SendMessage(input.Handle,0x1501,new IntPtr(1),placeholder);panel.Controls.Add(input);
   panel.Paint+=(sender,eventArgs)=>{var g=eventArgs.Graphics;g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;using(var pen=new Pen(Color.FromArgb(33,67,89),1.4f)){
    if(symbol==0){g.DrawRectangle(pen,16,15,25,10);g.DrawRectangle(pen,16,29,25,10);g.DrawLine(pen,20,20,29,20);g.DrawLine(pen,20,34,29,34);g.DrawEllipse(pen,35,19,2,2);g.DrawEllipse(pen,35,33,2,2);}
    else if(symbol==1){g.DrawEllipse(pen,23,10,17,17);g.DrawArc(pen,15,28,33,28,180,180);g.DrawLine(pen,15,42,48,42);}
    else {g.DrawArc(pen,23,10,17,24,180,180);g.DrawRectangle(pen,17,23,29,24);}
   }};
-  if(reveal){var toggle=new Button(){Text="Mostrar",Width=77,Dock=DockStyle.Right,FlatStyle=FlatStyle.Flat,TabStop=false,ForeColor=Color.FromArgb(16,53,77),Font=new Font("Segoe UI",9)};toggle.FlatAppearance.BorderSize=0;panel.Padding=new Padding(58,12,4,10);input.UseSystemPasswordChar=true;toggle.Click+=(sender,eventArgs)=>{input.UseSystemPasswordChar=!input.UseSystemPasswordChar;toggle.Text=input.UseSystemPasswordChar?"Mostrar":"Ocultar";};panel.Controls.Add(toggle);toggle.BringToFront();}
+  if(reveal){var toggle=new Button(){Text="Mostrar",Width=77,Height=38,Anchor=AnchorStyles.Top|AnchorStyles.Right,FlatStyle=FlatStyle.Flat,TabStop=false,ForeColor=Color.FromArgb(16,53,77),Font=new Font("Segoe UI",9)};toggle.FlatAppearance.BorderSize=0;panel.Padding=new Padding(58,12,4,10);input.UseSystemPasswordChar=true;toggle.Click+=(sender,eventArgs)=>{input.UseSystemPasswordChar=!input.UseSystemPasswordChar;toggle.Text=input.UseSystemPasswordChar?"Mostrar":"Ocultar";};panel.Controls.Add(toggle);panel.Resize+=(sender,eventArgs)=>toggle.SetBounds(panel.ClientSize.Width-82,8,77,panel.ClientSize.Height-16);toggle.BringToFront();}
   return panel;
  }
  void BuildLogin(){
@@ -97,6 +97,7 @@ public class XCIPTVPC : Form {
  void CheckLayout(){CenterScreens();
   if(!loginScreen.Visible||catalog.Visible||!loginScreen.Bounds.Contains(loginScreen.Controls[0].Bounds))throw new Exception("Login layout is outside the window");
   foreach(Control input in new Control[]{server,user,pass,login}){if(!input.Visible||input.Width<100||input.Height<15)throw new Exception("Login control is not usable");}
+  var toggle=pass.Parent.Controls.OfType<Button>().Single();if(!toggle.Visible||toggle.Bounds.IntersectsWith(pass.Bounds))throw new Exception("Password toggle is clipped");toggle.PerformClick();if(pass.UseSystemPasswordChar)throw new Exception("Password reveal failed");toggle.PerformClick();if(!pass.UseSystemPasswordChar)throw new Exception("Password hiding failed");
   string dir=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews");Directory.CreateDirectory(dir);
   using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"login.png"));}
   loginScreen.Visible=false;loadingScreen.Visible=true;loadingScreen.BringToFront();PerformLayout();using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,"loading.png"));}
@@ -106,7 +107,7 @@ public class XCIPTVPC : Form {
  string Api(string action){return host+"/player_api.php?username="+Esc(username)+"&password="+Esc(password)+(action==""?"":"&action="+action);}
  async Task<object> Fetch(string url){
   return await Task.Run(()=>{
-   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.4";
+   var req=(HttpWebRequest)WebRequest.Create(url);req.Timeout=45000;req.ReadWriteTimeout=45000;req.UserAgent="XCIPTV-PC/0.1.5";
    req.Accept="application/json, text/plain, */*";req.AutomaticDecompression=DecompressionMethods.GZip|DecompressionMethods.Deflate;
    try{using(var response=(HttpWebResponse)req.GetResponse())using(var stream=response.GetResponseStream())using(var reader=new StreamReader(stream)){
     string body=reader.ReadToEnd();return ParseResponse(body);

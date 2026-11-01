@@ -1,0 +1,52 @@
+name: Windows EXE
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.cs'
+      - '.github/workflows/windows.yml'
+      - 'LEIA-ME.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Windows executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          if (!(Test-Path $compiler)) { throw 'C# compiler not found' }
+          & $compiler /nologo /target:winexe /platform:anycpu /out:dist/EtherPlayer.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll EtherPlayer.cs
+          if ($LASTEXITCODE -ne 0) { throw 'C# compilation failed' }
+          Copy-Item LEIA-ME.md,ANALISE_TECNICA.md dist
+      - name: Check executable and start native interface
+        shell: pwsh
+        run: |
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path dist/EtherPlayer.exe))
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Invalid PE executable' }
+          $p = Start-Process (Resolve-Path dist/EtherPlayer.exe) -ArgumentList '--smoke-test' -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Interface initialization timeout' }
+          if ($p.ExitCode -ne 0) { throw "Interface initialization failed: $($p.ExitCode)" }
+          Get-FileHash dist/EtherPlayer.exe -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EtherPlayer-Windows
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish downloadable preview
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.1.${{ github.run_number }}"
+          Compress-Archive -Path dist/* -DestinationPath EtherPlayer-Windows.zip
+          gh release create $tag dist/EtherPlayer.exe EtherPlayer-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "EtherPlayer Windows $tag" --prerelease --notes 'Prévia nativa compilada no Windows. Requer VLC instalado. Compilação e inicialização da interface verificadas; login e reprodução dependem de teste com seu provedor. Não possui todos os recursos do XCIPTV.'
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }

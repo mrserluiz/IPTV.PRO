@@ -35,6 +35,8 @@ public class MediaGrid : Panel {
  readonly Dictionary<string,Image> artwork=new Dictionary<string,Image>();readonly Dictionary<string,long> accessed=new Dictionary<string,long>();long accessClock;readonly HashSet<string> pending=new HashSet<string>(),failed=new HashSet<string>();readonly SemaphoreSlim downloads=new SemaphoreSlim(4);bool closing;
  public MediaGrid(){Items=new Collection(this);AutoScroll=false;DoubleBuffered=true;SetStyle(ControlStyles.AllPaintingInWmPaint|ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(9,45,84);TabStop=true;Resize+=(s,e)=>Changed();MouseDown+=(s,e)=>{Focus();int col=e.X/CellWidth,row=(e.Y+scrollY)/CellHeight;int index=row*Columns+col;if(col<Columns&&index<Items.Count){selection=index;Invalidate();}};KeyDown+=(s,e)=>{int next=selection;if(e.KeyCode==Keys.Right)next++;else if(e.KeyCode==Keys.Left)next--;else if(e.KeyCode==Keys.Down)next+=Columns;else if(e.KeyCode==Keys.Up)next-=Columns;else if(e.KeyCode==Keys.Enter){OnDoubleClick(EventArgs.Empty);return;}else return;selection=Math.Max(0,Math.Min(Items.Count-1,next));scrollY=Math.Max(0,Math.Min(MaxScroll,(selection/Columns)*CellHeight));Invalidate();e.Handled=true;};}
  int Columns{get{return Math.Max(1,ClientSize.Width/170);}}int CellWidth{get{return Math.Max(150,ClientSize.Width/Columns);}}const int CellHeight=214;
+ internal int ScrollOffset{get{return scrollY;}}
+ public void ScrollToStart(){scrollY=0;selection=-1;QueueVisibleArtwork();Invalidate();}
  public void BeginUpdate(){suspended++;}public void EndUpdate(){suspended=Math.Max(0,suspended-1);Changed();}void Changed(){if(suspended>0)return;scrollY=Math.Min(scrollY,MaxScroll);Invalidate();}
  int MaxScroll{get{return Math.Max(0,((Items.Count+Columns-1)/Columns)*CellHeight-ClientSize.Height);}}
  public void ScrollWheel(int delta){scrollY=Math.Max(0,Math.Min(MaxScroll,scrollY-delta*CellHeight/240));Invalidate();}
@@ -69,3 +71,4 @@ public sealed class ListWheelRouter : IMessageFilter,IDisposable {
  public bool PreFilterMessage(ref Message message){if(message.Msg!=0x20a)return false;long data=message.LParam.ToInt64();var point=new Point((short)(data&0xffff),(short)((data>>16)&0xffff));int delta=(short)((message.WParam.ToInt64()>>16)&0xffff);return Route(point,delta);}
  public void Dispose(){Application.RemoveMessageFilter(this);}
 }
+

@@ -1,3 +1,11 @@
+## Navegação 0.2.3
+
+TV ao vivo inicia com um clique esquerdo na capa, sem outro botão de play. Clique direito na capa permite adicionar ou remover favoritos. Os favoritos de TV ao vivo, filmes e séries ficam separados; essa categoria reúne favoritos de todos os gêneros da seção atual. Favoritar um episódio marca sua série.
+
+O botão Voltar no player retorna à lista ou à sinopse de origem, sem minimizar. A tela cheia usa a mesma janela principal e preserva o estado anterior ao sair. Trocas de tela são aplicadas de uma vez, sem tela vazia intermediária; as animações de janela do Windows são desativadas apenas para o aplicativo. Capas e fundo da sinopse são carregados em paralelo e aplicados juntos.
+
+Os testes Windows verificam separação de favoritos, alvo do menu contextual, retorno sem minimizar e início automático de um canal local com um clique real.
+
 +## Correções 0.2.1
 
 Rolagem dos gêneros pela roda do mouse mesmo sem foco na lista. Cache de capas com proteção das imagens visíveis e atualização apenas dos cartões afetados. Detecção do foco nativo do VLC para restaurar controles com o movimento do ponteiro; clique na área de vídeo alterna play/pausa, inclusive em tela cheia, sem interferir nos botões. A dica de rolagem acompanha o ponteiro sem redesenho contínuo.
@@ -41,6 +49,7 @@ Canais, filmes, séries, categorias, favoritos, busca, EPG curto e M3U local. Ai
 ## Compilar
 
 Execute Compilar.cmd ou use Actions → Windows EXE. Requer .NET Framework 4.5+ (preferencialmente 4.8) e VLC 3.x. Não coloque dados de acesso no repositório.
+
 
 
 

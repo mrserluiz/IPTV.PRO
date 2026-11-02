@@ -66,9 +66,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v0.1.${{ github.run_number }}"
+          $tag = "v0.2.${{ github.run_number }}"
           Compress-Archive -Path dist/* -DestinationPath XCIPTV-PC-Windows.zip
-          gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Prévia nativa compilada no Windows. Requer VLC instalado. Compilação e inicialização da interface verificadas; login e reprodução dependem de teste com seu provedor. Não possui todos os recursos do XCIPTV.'
+          gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Sinopse com capas e fundo, ícones circulares responsivos, listas sem barras e dica de rolagem. Player flutuante com volume, mudo, legendas, proporção/zoom, saltos de 1 minuto e controles ocultos por inatividade. Gravação de trechos em MPEG-TS com confirmação para salvar em Vídeos; depende de formato e limite de conexões do provedor. Requer VLC 3 instalado. Testes locais de interface, reprodução e gravação no Windows.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }
 
 

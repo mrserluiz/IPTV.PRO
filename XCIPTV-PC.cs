@@ -38,7 +38,7 @@ public partial class XCIPTVPC : Form {
  JavaScriptSerializer json=new JavaScriptSerializer(){MaxJsonLength=int.MaxValue};
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
- public XCIPTVPC(){
+ public XCIPTVPC(){TestTrace("constructor");
   Text="XCIPTV-PC — Windows • prévia 0.2.0"; Width=1100;Height=740;MinimumSize=new Size(850,600);
   DoubleBuffered=true;AutoScaleMode=AutoScaleMode.Dpi;StartPosition=FormStartPosition.CenterScreen;
   BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
@@ -61,7 +61,7 @@ public partial class XCIPTVPC : Form {
   search.TextChanged+=(s,e)=>Filter();category.SelectedIndexChanged+=(s,e)=>Filter();play.Click+=(s,e)=>Play();items.DoubleClick+=(s,e)=>Play();
   back.Click+=async(s,e)=>await LoadList();star.Click+=(s,e)=>ToggleFavorite();guide.Click+=async(s,e)=>await Guide();
   m3u.Click+=async(s,e)=>await ImportM3u();
-  BuildLogin();BuildLoading();BuildNavigation();BuildCinema();ShowLogin();Resize+=(sender,eventArgs)=>CenterScreens();Shown+=(sender,eventArgs)=>CenterScreens();
+  TestTrace("login");BuildLogin();BuildLoading();TestTrace("navigation");BuildNavigation();TestTrace("cinema");BuildCinema();ShowLogin();TestTrace("ready");Resize+=(sender,eventArgs)=>CenterScreens();Shown+=(sender,eventArgs)=>CenterScreens();
   Directory.CreateDirectory(dataDir);var fav=Path.Combine(dataDir,"favorites.txt");if(File.Exists(fav))favorites=new HashSet<string>(File.ReadAllLines(fav));
   LoadPreferences();LoadSession();vlc=FindVlc(vlc);FormClosing+=(sender,eventArgs)=>{SavePreferences();if(fullscreen!=null)fullscreen.Close();CloseCinema();if(playbackTimer!=null){playbackTimer.Stop();playbackTimer.Dispose();}if(engine!=null){engine.Dispose();engine=null;}};
   Shown+=async(sender,eventArgs)=>{if(automaticLogin&&!Environment.GetCommandLineArgs().Any(x=>x.StartsWith("--")))await Connect();};
@@ -105,7 +105,7 @@ public partial class XCIPTVPC : Form {
   loadingScreen.Controls.Add(card);loadingScreen.Resize+=(sender,eventArgs)=>{card.Width=Math.Min(820,loadingScreen.ClientSize.Width-48);card.Left=(loadingScreen.ClientSize.Width-card.Width)/2;card.Top=(loadingScreen.ClientSize.Height-card.Height)/2;};
  }
  void SetLoading(int index,string text){string[] names={"TV AO VIVO","FILMES","SÉRIES","GUIA DE TV"};loadingStages[index].Text=names[index]+"\n"+text;}
- void Snapshot(string name){PerformLayout();string dir=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews");Directory.CreateDirectory(dir);using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,name+".png"));}}
+ void Snapshot(string name){TestTrace("snapshot "+name);PerformLayout();string dir=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews");Directory.CreateDirectory(dir);using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,name+".png"));}}
  void CheckLayout(){CenterScreens();if(!loginScreen.Visible||catalog.Visible||!loginScreen.Bounds.Contains(loginScreen.Controls.OfType<TableLayoutPanel>().First().Bounds))throw new Exception("Login layout is outside the window");foreach(Control input in new Control[]{server,user,pass,login})if(!input.Visible||input.Width<100||input.Height<15)throw new Exception("Login control is not usable");var toggle=pass.Parent.Controls.OfType<Button>().Single();toggle.PerformClick();if(pass.UseSystemPasswordChar)throw new Exception("Password reveal failed");toggle.PerformClick();Snapshot("login");
   HidePages();loadingScreen.Visible=true;loadingScreen.BringToFront();AttachHome(loadingScreen);CenterScreens();SetLoading(0,"SUCESSO!");SetLoading(1,"SUCESSO!");SetLoading(2,"Carregando…");Snapshot("loading");homeButton.PerformClick();if(!homeScreen.Visible||homeButton.Visible)throw new Exception("Home route failed");Snapshot("home");
   entries=Enumerable.Range(1,30).Select(i=>new Entry(){Name="Canal de demonstração "+i,Id=i.ToString(),Category=i%2==0?"news":"sports"}).ToList();category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});category.Items.Add(new Entry(){Name="Esportes",Id="sports"});category.Items.Add(new Entry(){Name="Notícias",Id="news"});category.SelectedIndex=0;SyncSidebar();Filter();ShowBrowser();if(!homeButton.Visible||items.Items.Count!=30)throw new Exception("Browser grid failed");Snapshot("catalog");category.SelectedIndex=1;if(items.Items.Count!=15)throw new Exception("Category filter failed");search.Text="demonstração 1";if(items.Items.Count!=6)throw new Exception("Search filter failed");search.Clear();homeButton.PerformClick();if(!homeScreen.Visible||homeButton.Visible)throw new Exception("Catalog home failed");ShowPlayback();if(playerBack==null||!playerBack.Visible)throw new Exception("Playback back missing");Snapshot("player");CinemaLayoutTest();ShowHome();if(!homeScreen.Visible)throw new Exception("Player home failed");entries.Clear();items.Items.Clear();
@@ -263,7 +263,7 @@ public partial class XCIPTVPC : Form {
    }catch(Exception ex){Busy(false,"Falha ao importar lista.");ShowError(ex);}
   }
  }
- [STAThread]public static void Main(string[] args){if(args.Contains("--player-test")){string executable=FindVlc(null);if(executable==null)throw new Exception("VLC installation missing for media test");EmbeddedVlc.LocalPlaybackTest(executable);return;}if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch{Environment.Exit(1);}}));Application.Run(window);}
+ [STAThread]public static void Main(string[] args){if(args.Contains("--player-test")){string executable=FindVlc(null);if(executable==null)throw new Exception("VLC installation missing for media test");EmbeddedVlc.LocalPlaybackTest(executable);return;}if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();if(args.Contains("--smoke-test")){Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);AppDomain.CurrentDomain.UnhandledException+=(s,e)=>File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),e.ExceptionObject.ToString());}var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),ex.ToString());Environment.Exit(1);}}));Application.Run(window);}
 }
 
 

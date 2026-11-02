@@ -41,8 +41,8 @@ jobs:
           if (!$test.WaitForExit(30000)) { $test.Kill(); throw 'Protocol tests timed out' }
           if ($test.ExitCode -ne 0) { throw 'Protocol diagnostics tests failed' }
           $p = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--smoke-test' -PassThru
-          if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Interface initialization timeout' }
-          if ($p.ExitCode -ne 0) { throw "Interface initialization failed: $($p.ExitCode)" }
+          if (!$p.WaitForExit(30000)) { $p.Kill(); Get-Content dist/test-*.txt -ErrorAction SilentlyContinue; throw 'Interface initialization timeout' }
+          if ($p.ExitCode -ne 0) { Get-Content dist/test-*.txt -ErrorAction SilentlyContinue; throw "Interface initialization failed: $($p.ExitCode)" }
           $media = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--player-test' -PassThru
           if (!$media.WaitForExit(45000)) { $media.Kill(); throw 'Internal media test timed out' }
           if ($media.ExitCode -ne 0) { throw 'Internal LibVLC local media playback failed' }
@@ -53,9 +53,12 @@ jobs:
           path: dist/*
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Interface-previews
-          path: dist/ui-previews/*.png
+          path: |
+            dist/ui-previews/*.png
+            dist/test-*.txt
           if-no-files-found: error
       - name: Publish downloadable preview
         if: github.ref == 'refs/heads/main'

@@ -23,7 +23,7 @@ public class HomeTile : Button {
 }
 public class QuietListBox : ListBox {
  [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool ShowScrollBar(IntPtr h,int bar,bool show);
- protected override void WndProc(ref Message m){base.WndProc(ref m);if(IsHandleCreated)ShowScrollBar(Handle,3,false);}
+ bool hiding; protected override void WndProc(ref Message m){base.WndProc(ref m);if(!hiding&&IsHandleCreated&&(m.Msg==15||m.Msg==133||m.Msg==5)){hiding=true;try{ShowScrollBar(Handle,3,false);}finally{hiding=false;}}}
 }
 public class MediaGrid : Panel {
  public sealed class Collection : List<object>{readonly MediaGrid owner;public Collection(MediaGrid owner){this.owner=owner;}public new void Add(object value){base.Add(value);owner.Changed();}public new void Clear(){base.Clear();owner.selection=-1;owner.Changed();}}

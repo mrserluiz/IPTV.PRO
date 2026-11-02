@@ -6,7 +6,7 @@ O botão Voltar no player retorna à lista ou à sinopse de origem, sem minimiza
 
 Os testes Windows verificam separação de favoritos, alvo do menu contextual, retorno sem minimizar e início automático de um canal local com um clique real.
 
-+## Correções 0.2.1
+## Correções 0.2.1
 
 Rolagem dos gêneros pela roda do mouse mesmo sem foco na lista. Cache de capas com proteção das imagens visíveis e atualização apenas dos cartões afetados. Detecção do foco nativo do VLC para restaurar controles com o movimento do ponteiro; clique na área de vídeo alterna play/pausa, inclusive em tela cheia, sem interferir nos botões. A dica de rolagem acompanha o ponteiro sem redesenho contínuo.
 

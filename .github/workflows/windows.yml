@@ -1,4 +1,4 @@
-+name: Windows EXE
+name: Windows EXE
 on:
   push:
     branches: [main]

@@ -81,7 +81,7 @@ public sealed class EmbeddedVlc : IDisposable {
  static void Four(BinaryWriter w,string value){w.Write(Encoding.ASCII.GetBytes(value));}
  static long List(BinaryWriter w,string type){Four(w,"LIST");long size=w.BaseStream.Position;w.Write(0);Four(w,type);return size;}
  static void Finish(BinaryWriter w,long size){long end=w.BaseStream.Position;w.BaseStream.Position=size;w.Write((int)(end-size-4));w.BaseStream.Position=end;}
- static void WriteVideo(string path){using(var w=new BinaryWriter(File.Create(path))){const int width=160,height=90,frames=40,frameSize=width*height*3;
+ internal static void WriteVideo(string path,int frames=40){using(var w=new BinaryWriter(File.Create(path))){const int width=160,height=90,frameSize=width*height*3;
   Four(w,"RIFF");long riff=w.BaseStream.Position;w.Write(0);Four(w,"AVI ");long hdrl=List(w,"hdrl");Four(w,"avih");w.Write(56);foreach(int value in new[]{100000,frameSize*10,0,0,frames,0,1,frameSize,width,height,0,0,0,0})w.Write(value);
   long strl=List(w,"strl");Four(w,"strh");w.Write(56);Four(w,"vids");Four(w,"DIB ");w.Write(0);w.Write((short)0);w.Write((short)0);foreach(int value in new[]{0,1,10,0,frames,frameSize,-1,0})w.Write(value);w.Write((short)0);w.Write((short)0);w.Write((short)width);w.Write((short)height);
   Four(w,"strf");w.Write(40);w.Write(40);w.Write(width);w.Write(height);w.Write((short)1);w.Write((short)24);foreach(int value in new[]{0,frameSize,0,0,0,0})w.Write(value);Finish(w,strl);Finish(w,hdrl);
@@ -101,4 +101,5 @@ public sealed class EmbeddedVlc : IDisposable {
   }}finally{if(File.Exists(path))File.Delete(path);}
  }
 }
+
 

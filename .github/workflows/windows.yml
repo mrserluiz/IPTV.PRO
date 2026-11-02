@@ -1,4 +1,4 @@
-name: Windows EXE
++name: Windows EXE
 on:
   push:
     branches: [main]
@@ -48,7 +48,7 @@ jobs:
           if ($media.ExitCode -ne 0) { throw 'Internal LibVLC local media playback failed' }
           $inputTest = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--input-test' -PassThru
           if (!$inputTest.WaitForExit(45000)) { $inputTest.Kill(); throw 'Native video input test timed out' }
-          if ($inputTest.ExitCode -ne 0) { throw 'Native video mouse and controls test failed' }
+          if ($inputTest.ExitCode -ne 0) { Get-Content dist/test-*.txt -ErrorAction SilentlyContinue; throw 'Native video mouse and controls test failed' }
           Get-FileHash dist/XCIPTV-PC.exe -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -73,6 +73,7 @@ jobs:
           Compress-Archive -Path dist/* -DestinationPath XCIPTV-PC-Windows.zip
           gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Sinopse com capas e fundo, ícones circulares responsivos, listas sem barras e dica de rolagem. Player flutuante com volume, mudo, legendas, proporção/zoom, saltos de 1 minuto e controles ocultos por inatividade. Gravação de trechos em MPEG-TS com confirmação para salvar em Vídeos; depende de formato e limite de conexões do provedor. Requer VLC 3 instalado. Testes locais de interface, reprodução e gravação no Windows.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }
+
 
 
 

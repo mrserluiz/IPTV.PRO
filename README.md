@@ -1,3 +1,9 @@
++## Correções 0.2.1
+
+Rolagem dos gêneros pela roda do mouse mesmo sem foco na lista. Cache de capas com proteção das imagens visíveis e atualização apenas dos cartões afetados. Detecção do foco nativo do VLC para restaurar controles com o movimento do ponteiro; clique na área de vídeo alterna play/pausa, inclusive em tela cheia, sem interferir nos botões. A dica de rolagem acompanha o ponteiro sem redesenho contínuo.
+
+O workflow testa rolagem sem foco, retenção das capas e interação real do mouse sobre um vídeo local do VLC (ocultar/restaurar controles e clicar para pausar/continuar), além das verificações anteriores.
+
 # XCIPTV-PC para Windows
 
 Cliente independente para Xtream e M3U, sem afiliação com o aplicativo XCIPTV oficial.
@@ -35,5 +41,6 @@ Canais, filmes, séries, categorias, favoritos, busca, EPG curto e M3U local. Ai
 ## Compilar
 
 Execute Compilar.cmd ou use Actions → Windows EXE. Requer .NET Framework 4.5+ (preferencialmente 4.8) e VLC 3.x. Não coloque dados de acesso no repositório.
+
 
 

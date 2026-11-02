@@ -32,6 +32,22 @@ public sealed class EmbeddedVlc : IDisposable {
  [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern int libvlc_audio_set_volume(IntPtr p,int volume);
  [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern uint libvlc_media_player_has_vout(IntPtr p);
  [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern IntPtr libvlc_media_player_get_hwnd(IntPtr p);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern void libvlc_media_add_option(IntPtr m,IntPtr option);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern void libvlc_audio_set_mute(IntPtr p,int mute);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern void libvlc_video_set_aspect_ratio(IntPtr p,IntPtr aspect);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern void libvlc_video_set_scale(IntPtr p,float scale);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern IntPtr libvlc_video_get_spu_description(IntPtr p);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern void libvlc_track_description_list_release(IntPtr list);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern int libvlc_video_set_spu(IntPtr p,int id);
+ [DllImport("libvlc.dll",CallingConvention=CallingConvention.Cdecl)]static extern int libvlc_media_player_add_slave(IntPtr p,int type,IntPtr uri,int select);
+ [System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]struct Track {public int Id;public IntPtr Name,Next;}
+ public void Mute(bool value){if(player!=IntPtr.Zero)libvlc_audio_set_mute(player,value?1:0);}
+ public void Aspect(string aspect,float zoom){var ptr=Utf8(aspect);try{libvlc_video_set_aspect_ratio(player,ptr);libvlc_video_set_scale(player,zoom);}finally{Marshal.FreeHGlobal(ptr);}}
+ public System.Collections.Generic.Dictionary<int,string> Subtitles(){var result=new System.Collections.Generic.Dictionary<int,string>();var first=libvlc_video_get_spu_description(player);try{var ptr=first;int count=0;while(ptr!=IntPtr.Zero&&count++<128){var track=(Track)Marshal.PtrToStructure(ptr,typeof(Track));result[track.Id]=Marshal.PtrToStringAnsi(track.Name)??("Legenda "+track.Id);ptr=track.Next;}}finally{if(first!=IntPtr.Zero)libvlc_track_description_list_release(first);}return result;}
+ public void Subtitle(int id){libvlc_video_set_spu(player,id);}
+ public void AddSubtitle(string uri){var ptr=Utf8(uri);try{if(libvlc_media_player_add_slave(player,0,ptr,1)!=0)throw new InvalidOperationException("Não foi possível carregar esta legenda.");}finally{Marshal.FreeHGlobal(ptr);}}
+ public void Record(string url,string path,long start){PlayOptions(url,new[]{":sout=#standard{access=file,mux=ts,dst='"+path.Replace("\\","/").Replace("'","")+"'}",":sout-all",":start-time="+(Math.Max(0,start)/1000.0).ToString(System.Globalization.CultureInfo.InvariantCulture)});}
+ void PlayOptions(string url,string[] options){if(player==IntPtr.Zero)throw new ObjectDisposedException("EmbeddedVlc");var ptr=Utf8(url);IntPtr media;try{media=libvlc_media_new_location(instance,ptr);}finally{Marshal.FreeHGlobal(ptr);}if(media==IntPtr.Zero)throw new InvalidOperationException("Mídia indisponível.");try{foreach(var value in options){ptr=Utf8(value);try{libvlc_media_add_option(media,ptr);}finally{Marshal.FreeHGlobal(ptr);}}libvlc_media_player_set_media(player,media);}finally{libvlc_media_release(media);}if(libvlc_media_player_play(player)!=0)throw new InvalidOperationException("Não foi possível iniciar a mídia.");}
  static IntPtr Utf8(string value){byte[] bytes=Encoding.UTF8.GetBytes(value+"\0");var ptr=Marshal.AllocHGlobal(bytes.Length);Marshal.Copy(bytes,0,ptr,bytes.Length);return ptr;}
  public EmbeddedVlc(string executable,bool test){
   string directory=Path.GetFullPath(Path.GetDirectoryName(executable));
@@ -77,9 +93,12 @@ public sealed class EmbeddedVlc : IDisposable {
    window.Controls.Add(surface);window.Show();Application.DoEvents();using(var engine=new EmbeddedVlc(executable,true)){
     engine.SetWindow(surface.Handle);if(libvlc_media_player_get_hwnd(engine.player)!=surface.Handle)throw new Exception("Video HWND binding failed");engine.Play(new Uri(path).AbsoluteUri);
     bool playing=false;for(int i=0;i<90;i++){Application.DoEvents();System.Threading.Thread.Sleep(100);if(engine.State==7)throw new Exception("Local LibVLC video playback failed");if(engine.State==3&&engine.Time>100&&libvlc_media_player_has_vout(engine.player)>0){playing=true;break;}}
-    if(!playing)throw new Exception("Internal video output did not start");engine.Volume(35);engine.Pause(true);for(int i=0;i<5;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}if(engine.State!=4)throw new Exception("Pause failed");
+    if(!playing)throw new Exception("Internal video output did not start");engine.Mute(true);engine.Mute(false);engine.Aspect("16:9",0);engine.Aspect("",0);engine.Subtitles();engine.Subtitle(-1);engine.Volume(35);engine.Pause(true);for(int i=0;i<5;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}if(engine.State!=4)throw new Exception("Pause failed");
     engine.Position=0.5f;engine.Pause(false);engine.Stop();
+    string clip=path+".ts";try{using(var recording=new EmbeddedVlc(executable,true)){recording.PlayOptions(new Uri(path).AbsoluteUri,new[]{":sout=#transcode{vcodec=mp2v,vb=300}:standard{access=file,mux=ts,dst='"+clip.Replace("\\","/")+"'}"});for(int i=0;i<22;i++){Application.DoEvents();System.Threading.Thread.Sleep(100);}recording.Stop();}if(!File.Exists(clip)||new FileInfo(clip).Length<188)throw new Exception("Local clip recording failed");}finally{if(File.Exists(clip))File.Delete(clip);}
+
    }window.Close();
   }}finally{if(File.Exists(path))File.Delete(path);}
  }
 }
+

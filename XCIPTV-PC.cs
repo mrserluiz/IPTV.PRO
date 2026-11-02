@@ -31,7 +31,7 @@ public partial class XCIPTVPC : Form {
  Dictionary<string,CatalogData> catalogs=new Dictionary<string,CatalogData>();
 
  CheckBox rememberLogin=new CheckBox();bool automaticLogin;
- EmbeddedVlc engine;Panel playerPane,videoSurface;SplitContainer videoSplit;Label mediaTitle,playbackTime;TrackBar seek,volume;Button pauseButton;System.Windows.Forms.Timer playbackTimer;bool seeking;Form fullscreen;
+ EmbeddedVlc engine;Panel playerPane,videoSurface;SplitContainer videoSplit;Label mediaTitle,playbackTime;TimelineBar seek;TrackBar volume;Button pauseButton;System.Windows.Forms.Timer playbackTimer;bool seeking;Form fullscreen;
 
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr hWnd,int msg,IntPtr wParam,string lParam);
  string host,username,password,kind="live",vlc; bool busy=false,episodes=false;

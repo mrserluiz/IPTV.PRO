@@ -95,7 +95,7 @@ public partial class XCIPTVPC {
   playbackTimer=new System.Windows.Forms.Timer(){Interval=400};playbackTimer.Tick+=(s,e)=>UpdatePlayback();playbackTimer.Start();
  }
  GlyphButton MakeGlyph(string glyph,string name,Action action){var button=new GlyphButton(glyph,name);buttonHints.SetToolTip(button,name);button.Click+=(s,e)=>{lastActivity=DateTime.UtcNow;action();};return button;}
- void RefreshOverlays(){if(sceneUpdateDepth>0)return;if(overlay==null||playerBack==null||closingCinema)return;bool active=cinemaFullscreen||playbackScreen!=null&&playbackScreen.Visible;var owner=this;if(!active||owner.WindowState==FormWindowState.Minimized||!owner.Visible){HideOverlays();return;}bool appActive=ApplicationForeground()&&owner.Enabled;if(!appActive&&!Environment.GetCommandLineArgs().Contains("--smoke-test")){HideOverlays();return;}
+ void RefreshOverlays(){if(sceneUpdateDepth>0)return;if(cinemaFullscreen){HideOverlays();return;}if(overlay==null||playerBack==null||closingCinema)return;bool active=cinemaFullscreen||playbackScreen!=null&&playbackScreen.Visible;var owner=this;if(!active||owner.WindowState==FormWindowState.Minimized||!owner.Visible){HideOverlays();return;}bool appActive=ApplicationForeground()&&owner.Enabled;if(!appActive&&!Environment.GetCommandLineArgs().Contains("--smoke-test")){HideOverlays();return;}
   chromeHidden=Immersive&&!recordDialog&&(DateTime.UtcNow-lastActivity).TotalSeconds>3;var rect=videoSurface.RectangleToScreen(videoSurface.ClientRectangle);if(rect.Width<100||rect.Height<100)return;
   if(chromeHidden){HideOverlays();return;}int height=Math.Min(270,Math.Max(220,rect.Height/4));overlay.Bounds=new Rectangle(rect.X+12,rect.Bottom-height-12,Math.Max(300,rect.Width-24),height);int buttonWidth=Math.Max(48,Math.Min(104,(rect.Width-300)/8));foreach(var button in new GlyphButton[]{recordButton,muteButton,settingsButton,subtitleButton,aspectButton,jumpForward,(GlyphButton)pauseButton,jumpBack})button.Width=buttonWidth;playerBack.Location=new Point(rect.X+14,rect.Y+14);if(overlay.Owner!=owner)overlay.Owner=owner;if(playerBack.Owner!=owner)playerBack.Owner=owner;if(!overlay.Visible)overlay.Show();if(!playerBack.Visible)playerBack.Show();
  }
@@ -113,9 +113,86 @@ public partial class XCIPTVPC {
  void ShowPlayerSettings(){recordDialog=true;try{using(var dialog=new Form(){Text="Configurações do player",Size=new Size(430,290),StartPosition=FormStartPosition.CenterParent,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false,BackColor=Color.FromArgb(9,27,44),ForeColor=Color.White}){var label=new Label(){Text="Volume",Location=new Point(20,20),AutoSize=true};var slider=new TrackBar(){Minimum=0,Maximum=100,Value=volume.Value,Location=new Point(20,45),Width=360,TickStyle=TickStyle.None};slider.ValueChanged+=(s,e)=>volume.Value=slider.Value;dialog.Controls.Add(label);dialog.Controls.Add(slider);var aspect=PlayerButton("Proporção / zoom",170);aspect.Location=new Point(20,100);aspect.Click+=(s,e)=>CycleAspect();dialog.Controls.Add(aspect);var full=PlayerButton(!cinemaFullscreen?"Tela cheia (Esc sai)":"Sair da tela cheia",180);full.Location=new Point(205,100);full.Click+=(s,e)=>{dialog.Close();ToggleFullscreen();};dialog.Controls.Add(full);var note=new Label(){Text="Atalhos: espaço pausa/continua; ← / → salta 1 minuto; F11 tela cheia.\nA gravação usa uma segunda conexão com o provedor.",Location=new Point(20,155),Size=new Size(365,65)};dialog.Controls.Add(note);dialog.ShowDialog(this);}}finally{recordDialog=false;lastActivity=DateTime.UtcNow;}}
  void ReturnFromPlayer(){if(recorder!=null&&!FinishRecording())return;if(cinemaFullscreen)ExitFullscreen();StopPlayback();if(playerReturnPage==detailsScreen&&detailEntry!=null){RenderDetails(detailEntry);ChangePage(detailsScreen,()=>AttachHome(detailsScreen));}else ShowBrowser();if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;Activate();Focus();}
  void StopPlayback(){if(recorder!=null)FinishRecording();if(engine!=null)engine.Stop();HideOverlays();if(mediaTitle!=null)mediaTitle.Text="Selecione um canal, filme ou episódio";}
- FormWindowState beforeFullscreenState;FormBorderStyle beforeFullscreenBorder;Rectangle beforeFullscreenBounds;Control playerReturnPage;
- void ToggleFullscreen(){if(cinemaFullscreen){ExitFullscreen();return;}beforeFullscreenState=WindowState;beforeFullscreenBorder=FormBorderStyle;beforeFullscreenBounds=WindowState==FormWindowState.Normal?Bounds:RestoreBounds;HideOverlays();FreezeWindow(true);try{cinemaFullscreen=true;WindowState=FormWindowState.Normal;FormBorderStyle=FormBorderStyle.None;Bounds=Screen.FromControl(this).Bounds;}finally{FreezeWindow(false);}lastActivity=DateTime.UtcNow;RefreshOverlays();}
- void ExitFullscreen(){if(!cinemaFullscreen)return;HideOverlays();FreezeWindow(true);try{cinemaFullscreen=false;FormBorderStyle=beforeFullscreenBorder;WindowState=FormWindowState.Normal;Bounds=beforeFullscreenBounds;WindowState=beforeFullscreenState==FormWindowState.Minimized?FormWindowState.Normal:beforeFullscreenState;}finally{FreezeWindow(false);}lastActivity=DateTime.UtcNow;}
+ FormWindowState beforeFullscreenState;
+ FormBorderStyle beforeFullscreenBorder;
+ Rectangle beforeFullscreenBounds;
+ Size beforeFullscreenMinimum;
+ bool beforeFullscreenTopMost;
+ Control playerReturnPage;
+
+ [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+ struct MonitorRectangle {
+  public int Left, Top, Right, Bottom;
+ }
+
+ [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+ struct MonitorInfo {
+  public int Size;
+  public MonitorRectangle Monitor, Work;
+  public int Flags;
+ }
+
+ [System.Runtime.InteropServices.DllImport("user32.dll")]
+ static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+ [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint="GetMonitorInfoW")]
+ static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+ [System.Runtime.InteropServices.DllImport("user32.dll")]
+ static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+ Rectangle CurrentMonitorBounds() {
+  var info = new MonitorInfo();
+  info.Size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(MonitorInfo));
+  if (GetMonitorInfo(MonitorFromWindow(Handle, 2), ref info))
+   return Rectangle.FromLTRB(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
+  return Screen.FromHandle(Handle).Bounds;
+ }
+
+ void ToggleFullscreen() {
+  if (cinemaFullscreen) {
+   ExitFullscreen();
+   return;
+  }
+  if (!playbackScreen.Visible) return;
+  // Capture the current monitor before restoring a maximized window.
+  Rectangle monitor = CurrentMonitorBounds();
+  beforeFullscreenState = WindowState;
+  beforeFullscreenBorder = FormBorderStyle;
+  beforeFullscreenBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+  beforeFullscreenMinimum = MinimumSize;
+  beforeFullscreenTopMost = TopMost;
+
+  HideOverlays();
+  FreezeWindow(true);
+  try {
+   cinemaFullscreen = true;
+   WindowState = FormWindowState.Normal;
+   MinimumSize = Size.Empty;
+   FormBorderStyle = FormBorderStyle.None;
+   TopMost = true;
+   Bounds = monitor;
+   // Update the non-client frame and place the window above the taskbar.
+   SetWindowPos(Handle, new IntPtr(-1), monitor.X, monitor.Y, monitor.Width, monitor.Height, 0x0030);
+  } finally {
+   FreezeWindow(false);
+  }
+ }
+
+ void ExitFullscreen() {
+  if (!cinemaFullscreen) return;
+  FreezeWindow(true);
+  try {
+   cinemaFullscreen = false;
+   TopMost = beforeFullscreenTopMost;
+   FormBorderStyle = beforeFullscreenBorder;
+   MinimumSize = beforeFullscreenMinimum;
+   Bounds = beforeFullscreenBounds;
+   WindowState = beforeFullscreenState;
+  } finally {
+   FreezeWindow(false);
+  }
+  lastActivity = DateTime.UtcNow;
+  RefreshOverlays();
+ }
  void PlayerKeys(KeyEventArgs e){lastActivity=DateTime.UtcNow;if(e.KeyCode==Keys.Escape&&cinemaFullscreen){ExitFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.F11){ToggleFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.Space){TogglePause();e.Handled=true;}else if(e.KeyCode==Keys.Left){Jump(-60000);e.Handled=true;}else if(e.KeyCode==Keys.Right){Jump(60000);e.Handled=true;}}
  protected override void OnKeyDown(KeyEventArgs e){if(playbackScreen!=null&&playbackScreen.Visible)PlayerKeys(e);base.OnKeyDown(e);}
  void ToggleRecording(){if(recorder!=null){FinishRecording();return;}if(engine==null||currentUrl==null||engine.State!=3)return;recordPath=Path.Combine(Path.GetTempPath(),"XCIPTV-"+Guid.NewGuid().ToString("N")+".ts");try{recorder=new EmbeddedVlc(vlc,false,true);recorder.Record(currentUrl,recordPath,engine.Seekable?engine.Time:0);recordStarted=DateTime.UtcNow;buttonHints.Show("Gravando. Clique novamente para terminar e salvar.",recordButton,0,-30,3500);}catch{DiscardRecording();MessageBox.Show(this,"Não foi possível iniciar a gravação. O formato ou o limite de conexões do provedor pode impedir esta função.","Gravação");}}
@@ -139,7 +216,7 @@ public partial class XCIPTVPC {
   window.Show();window.Activate();window.ShowPlayback();window.engine=new EmbeddedVlc(executable,true);window.engine.SetWindow(window.videoSurface.Handle);window.engine.Play(new Uri(path).AbsoluteUri);for(int i=0;i<80&&window.engine.Time<100;i++)WaitUi(100);if(window.engine.State!=3)throw new Exception("Input test playback failed");window.WindowState=FormWindowState.Maximized;WaitUi(100);var surface=window.videoSurface.RectangleToScreen(window.videoSurface.ClientRectangle);var point=new Point(surface.Left+surface.Width/2,surface.Top+surface.Height/3);Cursor.Position=point;WaitUi(100);if(!window.VideoHit(point))throw new Exception("Native video hit-test failed");if(!window.ApplicationForeground())throw new Exception("Native foreground detection failed");window.lastPointer=point;window.lastActivity=DateTime.UtcNow.AddSeconds(-5);window.RefreshOverlays();if(window.overlay.Visible)throw new Exception("Input test idle controls did not hide");Cursor.Position=new Point(point.X+30,point.Y);WaitUi(160);if(!window.overlay.Visible)throw new Exception("Real pointer did not restore controls");NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=4)throw new Exception("Native video click did not pause");NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=3)throw new Exception("Native video click did not resume");TestTrace("pointer pause/resume passed; checking same-window fullscreen return");var mainHandle=window.Handle;var previousState=window.WindowState;window.ToggleFullscreen();window.ReturnFromPlayer();WaitUi(120);TestTrace("return: old HWND="+mainHandle+" current="+window.Handle+" state="+window.WindowState+" expected="+previousState+" visible="+window.Visible+" catalog="+window.catalog.Visible);if(window.cinemaFullscreen||!window.Visible||window.WindowState!=previousState||!window.catalog.Visible)throw new Exception("Player return changed or minimized main window");TestTrace("same-window return passed; checking live autoplay");window.kind="live";window.guideMode=false;window.entries=new List<Entry>{new Entry(){Id="local-live",Name="Canal local de teste",Url=new Uri(path).AbsoluteUri}};window.category.Items.Clear();window.category.Items.Add(new Entry(){Id="",Name="Todos"});window.category.SelectedIndex=0;window.Filter();window.vlc=executable;Cursor.Position=window.items.PointToScreen(new Point(50,50));NativePointer.TestButton(true);WaitUi(90);NativePointer.TestButton(false);WaitUi(450);for(int i=0;i<30&&window.engine.State!=3;i++)WaitUi(100);TestTrace("live: state="+window.engine.State+" page="+window.playbackScreen.Visible+" selected="+(window.items.SelectedItem!=null)+" current="+(window.currentMedia==null?"none":window.currentMedia.Id));if(!window.playbackScreen.Visible||window.engine.State!=3||window.currentMedia==null||window.currentMedia.Id!="local-live")throw new Exception("Single click live autoplay failed");window.ReturnFromPlayer();if(!window.catalog.Visible||window.WindowState!=previousState)throw new Exception("Live return failed");window.Close();
  }}finally{NativePointer.TestButton(false);if(File.Exists(path))File.Delete(path);}}
  static void TestTrace(string value){if(Environment.GetCommandLineArgs().Any(x=>x=="--smoke-test"||x=="--input-test"))File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-trace.txt"),value+Environment.NewLine);}
- void CinemaLayoutTest(){InputRegressionTest();TestTrace("cinema layout");if(seek.Width<200)throw new Exception("Timeline width invalid");var sample=new Entry(){Name="Filme de demonstração (2026)",Details=new MediaDetails(){Plot="Descrição do conteúdo fornecida pelo catálogo. Elenco, gênero, classificação e data aparecem antes de reproduzir.",Rating="7",Genre="Drama",Date="2026-11-02",Cast="Elenco de demonstração",Director="Direção de demonstração"}};HidePages();detailsScreen.Visible=true;detailsScreen.BringToFront();detailEntry=sample;detailsCover.Image=logoImage;RenderDetails(sample);AttachHome(detailsScreen);Snapshot("synopsis");if(detailsBack.Top<=detailsPlay.Top||detailsCover.Width<150)throw new Exception("Synopsis controls invalid");ShowPlayback();playingMetadata.Text=sample.Name+Environment.NewLine+sample.Details.Summary;RefreshOverlays();if(!overlay.Visible)throw new Exception("Overlay missing");using(var bitmap=new Bitmap(overlay.Width,overlay.Height)){overlay.DrawToBitmap(bitmap,new Rectangle(0,0,bitmap.Width,bitmap.Height));bitmap.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews","controls.png"));}TestTrace("fullscreen");ToggleFullscreen();lastActivity=DateTime.UtcNow.AddSeconds(-5);RefreshOverlays();if(overlay.Visible||playerBack.Visible)throw new Exception("Idle controls did not hide");lastActivity=DateTime.UtcNow;RefreshOverlays();if(!overlay.Visible||!playerBack.Visible)throw new Exception("Active controls missing");ExitFullscreen();ReturnFromPlayer();if(!detailsScreen.Visible||WindowState==FormWindowState.Minimized)throw new Exception("Synopsis back navigation failed");detailsEpoch++;}
+ void CinemaLayoutTest(){InputRegressionTest();TestTrace("cinema layout");if(seek.Width<200)throw new Exception("Timeline width invalid");var sample=new Entry(){Name="Filme de demonstração (2026)",Details=new MediaDetails(){Plot="Descrição do conteúdo fornecida pelo catálogo. Elenco, gênero, classificação e data aparecem antes de reproduzir.",Rating="7",Genre="Drama",Date="2026-11-02",Cast="Elenco de demonstração",Director="Direção de demonstração"}};HidePages();detailsScreen.Visible=true;detailsScreen.BringToFront();detailEntry=sample;detailsCover.Image=logoImage;RenderDetails(sample);AttachHome(detailsScreen);Snapshot("synopsis");if(detailsBack.Top<=detailsPlay.Top||detailsCover.Width<150)throw new Exception("Synopsis controls invalid");ShowPlayback();playingMetadata.Text=sample.Name+Environment.NewLine+sample.Details.Summary;RefreshOverlays();if(!overlay.Visible)throw new Exception("Overlay missing");using(var bitmap=new Bitmap(overlay.Width,overlay.Height)){overlay.DrawToBitmap(bitmap,new Rectangle(0,0,bitmap.Width,bitmap.Height));bitmap.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews","controls.png"));}TestTrace("fullscreen");var monitor=CurrentMonitorBounds();var original=Bounds;var originalBorder=FormBorderStyle;var originalTopMost=TopMost;ToggleFullscreen();PerformLayout();if(!cinemaFullscreen||FormBorderStyle!=FormBorderStyle.None||!TopMost||videoSurface.RectangleToScreen(videoSurface.ClientRectangle)!=monitor)throw new Exception("Fullscreen video does not cover the monitor");RefreshOverlays();if(overlay.Visible||playerBack.Visible)throw new Exception("Fullscreen chrome visible");ExitFullscreen();if(Bounds!=original||FormBorderStyle!=originalBorder||TopMost!=originalTopMost)throw new Exception("Original window was not restored");ReturnFromPlayer();if(!detailsScreen.Visible||WindowState==FormWindowState.Minimized)throw new Exception("Synopsis back navigation failed");detailsEpoch++;}
 }
 
 

@@ -35,6 +35,31 @@ public class MediaGrid : Panel {
  readonly Dictionary<string,Image> artwork=new Dictionary<string,Image>();readonly Dictionary<string,long> accessed=new Dictionary<string,long>();long accessClock;readonly HashSet<string> pending=new HashSet<string>(),failed=new HashSet<string>();readonly SemaphoreSlim downloads=new SemaphoreSlim(4);bool closing;
  public MediaGrid(){Items=new Collection(this);AutoScroll=false;DoubleBuffered=true;SetStyle(ControlStyles.AllPaintingInWmPaint|ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(9,45,84);TabStop=true;Resize+=(s,e)=>Changed();MouseDown+=(s,e)=>{Focus();SelectAt(e.Location);};KeyDown+=(s,e)=>{int next=selection;if(e.KeyCode==Keys.Right)next++;else if(e.KeyCode==Keys.Left)next--;else if(e.KeyCode==Keys.Down)next+=Columns;else if(e.KeyCode==Keys.Up)next-=Columns;else if(e.KeyCode==Keys.Enter){if(ItemActivated!=null)ItemActivated(this,EventArgs.Empty);e.Handled=true;return;}else return;selection=Math.Max(0,Math.Min(Items.Count-1,next));scrollY=Math.Max(0,Math.Min(MaxScroll,(selection/Columns)*CellHeight));Invalidate();e.Handled=true;};}
  public Entry SelectAt(Point point){int col=point.X/CellWidth,row=(point.Y+scrollY)/CellHeight;int index=row*Columns+col;selection=point.X>=0&&point.Y>=0&&col<Columns&&index>=0&&index<Items.Count?index:-1;Invalidate();return SelectedItem as Entry;}
+ Font movieTitleFont, largeMovieTitleFont;
+ bool boldMovieTitles;
+ internal bool BoldMovieTitles {
+  get { return boldMovieTitles; }
+  set { if (boldMovieTitles != value) { boldMovieTitles = value; Invalidate(); } }
+ }
+ protected override void OnFontChanged(EventArgs e) {
+  ReleaseTitleFonts();
+  base.OnFontChanged(e);
+ }
+ void ReleaseTitleFonts() {
+  if (movieTitleFont != null) { movieTitleFont.Dispose(); movieTitleFont = null; }
+  if (largeMovieTitleFont != null) { largeMovieTitleFont.Dispose(); largeMovieTitleFont = null; }
+ }
+ Font TitleFont {
+  get {
+   if (!boldMovieTitles) return Font;
+   if (largeCards) {
+    if (largeMovieTitleFont == null) largeMovieTitleFont = new Font(Font.FontFamily, Font.Size + 3, FontStyle.Bold);
+    return largeMovieTitleFont;
+   }
+   if (movieTitleFont == null) movieTitleFont = new Font(Font, FontStyle.Bold);
+   return movieTitleFont;
+  }
+ }
  bool largeCards;
  internal bool LargeCards {
   get { return largeCards; }
@@ -61,7 +86,7 @@ public class MediaGrid : Panel {
   for(int row=first;row<last;row++)for(int col=0;col<Columns;col++){int index=row*Columns+col;if(index>=Items.Count)break;var entry=Items[index] as Entry;if(entry==null)continue;var rect=new Rectangle(col*CellWidth+6,row*CellHeight-scrollY+6,CellWidth-12,CellHeight-12);using(var fill=new SolidBrush(index==selection?Color.FromArgb(20,95,147):Color.FromArgb(17,26,35)))e.Graphics.FillRectangle(fill,rect);using(var border=new Pen(index==selection?Color.Gold:Color.FromArgb(50,88,118),index==selection?2:1))e.Graphics.DrawRectangle(border,rect);
    var picture=new Rectangle(rect.X+3,rect.Y+3,rect.Width-6,ArtworkHeight);Image art=null;if(!string.IsNullOrEmpty(entry.Icon)){if(!artwork.TryGetValue(entry.Icon,out art))RequestArtwork(entry.Icon);else accessed[entry.Icon]=++accessClock;}if(art==null)art=DefaultArtwork;
    if(art!=null){float scale=Math.Min((float)picture.Width/art.Width,(float)picture.Height/art.Height);int w=(int)(art.Width*scale),h=(int)(art.Height*scale);e.Graphics.DrawImage(art,picture.X+(picture.Width-w)/2,picture.Y+(picture.Height-h)/2,w,h);}else TextRenderer.DrawText(e.Graphics,"▶",Font,picture,Color.LightBlue,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
-   TextRenderer.DrawText(e.Graphics,entry.Name,Font,new Rectangle(rect.X+5,rect.Y+ArtworkHeight+8,rect.Width-10,44),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis);
+   TextRenderer.DrawText(e.Graphics,entry.Name,TitleFont,new Rectangle(rect.X+5,rect.Y+ArtworkHeight+8,rect.Width-10,rect.Height-ArtworkHeight-12),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis);
   }
   if(Items.Count==0)TextRenderer.DrawText(e.Graphics,"Nenhum item nesta seleção",Font,ClientRectangle,Color.LightBlue,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
  }
@@ -75,7 +100,7 @@ public class MediaGrid : Panel {
    if(closing){if(result!=null)result.Dispose();return;}if(result==null)failed.Add(url);else{StoreArtwork(url,result);}pending.Remove(url);QueueVisibleArtwork();InvalidateArtwork(url);
   }catch{if(result!=null)result.Dispose();if(!closing){pending.Remove(url);failed.Add(url);}}
  }
- protected override void Dispose(bool disposing){closing=true;if(disposing){foreach(var image in artwork.Values)image.Dispose();artwork.Clear();}base.Dispose(disposing);}
+ protected override void Dispose(bool disposing){closing=true;if(disposing){ReleaseTitleFonts();foreach(var image in artwork.Values)image.Dispose();artwork.Clear();}base.Dispose(disposing);}
 }
 
 

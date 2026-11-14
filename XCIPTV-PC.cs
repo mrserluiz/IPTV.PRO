@@ -50,10 +50,27 @@ public partial class XCIPTVPC : Form {
   var header=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(8,38,79)};
   header.Controls.Add(new PictureBox(){Image=logoImage,SizeMode=PictureBoxSizeMode.Zoom,Location=new Point(90,8),Size=new Size(62,62)});
   header.Controls.Add(new Label(){Text="XCIPTV-PC",AutoSize=true,Font=new Font("Segoe UI",20,FontStyle.Regular),Location=new Point(165,15),ForeColor=Color.White});
-  var leave=new Button(){Text="Sair da conta",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White};leave.Click+=(sender,eventArgs)=>{host=null;password=null;catalogs.Clear();ForgetSession();StopPlayback();pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();};header.Controls.Add(leave);var configureVlc=new Button(){Text="Configurar VLC",Dock=DockStyle.Right,Width=145,FlatStyle=FlatStyle.Flat,ForeColor=Color.White,BackColor=Color.FromArgb(3,31,61)};configureVlc.Click+=(sender,eventArgs)=>SelectVlc();header.Controls.Add(configureVlc);root.Controls.Add(header);
+  var leave = PlayerButton("🔐", 52);
+  leave.Dock = DockStyle.Right;
+  DescribeIcon(leave, "Sair da conta");
+  leave.Click += (sender,eventArgs) => ConfirmSignOut();
+  header.Controls.Add(leave);
+  var configureVlc = PlayerButton("⚙️", 52);
+  configureVlc.Dock = DockStyle.Right;
+  DescribeIcon(configureVlc, "Configurar VLC");
+  configureVlc.Click += (sender,eventArgs) => SelectVlc();
+  header.Controls.Add(configureVlc);
+  root.Controls.Add(header);
   var filters=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=3};foreach(float width in new[]{22f,35f,43f})filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,width));
   mode.Items.AddRange(new object[]{"TV ao vivo","Filmes","Séries","Favoritos desta seção"});mode.SelectedIndex=0;mode.DropDownStyle=category.DropDownStyle=ComboBoxStyle.DropDownList;mode.Dock=category.Dock=search.Dock=DockStyle.Fill;
-  filters.Controls.Add(mode);filters.Controls.Add(category);filters.Controls.Add(search);root.Controls.Add(filters);
+  filters.Controls.Add(mode);filters.Controls.Add(category);var searchBox = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(9, 27, 44), Padding = new Padding(0, 4, 0, 0) };
+  var magnifier = new Label { Text = "🔎", Dock = DockStyle.Left, Width = 34,
+   TextAlign = ContentAlignment.TopCenter, ForeColor = Color.White, Font = new Font("Segoe UI Symbol", 13) };
+  magnifier.Click += (sender,eventArgs) => search.Focus();
+  magnifier.Disposed += (sender,eventArgs) => magnifier.Font.Dispose();
+  searchBox.Controls.Add(search);
+  searchBox.Controls.Add(magnifier);
+  filters.Controls.Add(searchBox);root.Controls.Add(filters);
   items.Dock=DockStyle.Fill;items.BackColor=Color.FromArgb(30,36,48);items.ForeColor=Color.White;items.BorderStyle=BorderStyle.None;items.HorizontalScrollbar=true;BuildPlayer(root);
   back.Text = "Voltar às séries";
   back.Visible = false;
@@ -133,6 +150,31 @@ public partial class XCIPTVPC : Form {
  async Task OpenSection(int index,bool epg){if(busy)return;if(host==null&&entries.Count==0){ShowLogin();return;}guideMode=epg;suppressMode=true;mode.SelectedIndex=index;suppressMode=false;search.Clear();if(host!=null)await LoadList();else Filter();ShowBrowser();}
  void SyncSidebar(){if(categorySide==null||syncCategories)return;syncCategories=true;categorySide.BeginUpdate();categorySide.Items.Clear();categorySide.Items.Add(new Entry(){Name=FavoriteTitle()+" ("+FavoriteCount()+")",Id="__favorites"});for(int i=0;i<category.Items.Count;i++){var cat=category.Items[i] as Entry;if(cat==null)continue;int count=cat.Id==""?entries.Count:entries.Count(x=>x.Category==cat.Id);categorySide.Items.Add(new Entry(){Name=cat.Name+" ("+count+")",Id=cat.Id});}categorySide.SelectedIndex=mode.SelectedIndex==3||category.Items.Count==0?0:Math.Min(categorySide.Items.Count-1,Math.Max(1,category.SelectedIndex+1));categorySide.EndUpdate();syncCategories=false;}
  Button homeFullscreenButton;
+ void DescribeIcon(Button button, string label) {
+  button.AccessibleName = label;
+  button.Font = new Font("Segoe UI Symbol", 14);
+  button.Disposed += (sender,eventArgs) => button.Font.Dispose();
+  buttonHints.SetToolTip(button, label);
+ }
+
+ void ConfirmSignOut() {
+  if (host == null && !automaticLogin) {
+   ShowLogin();
+   return;
+  }
+  var answer = MessageBox.Show(this, "Deseja realmente sair da conta?", "XCIPTV-PC",
+   MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+  if (answer != DialogResult.OK) return;
+  StopPlayback();
+  host = null;
+  password = null;
+  catalogs.Clear();
+  ForgetSession();
+  pass.Clear();
+  entries.Clear();
+  items.Items.Clear();
+  ShowLogin();
+ }
  void UpdateHomeFullscreenButton() {
   if (homeFullscreenButton != null)
    homeFullscreenButton.Text = cinemaFullscreen ? "Sair da tela cheia" : "Tela cheia (F11)";
@@ -160,7 +202,10 @@ public partial class XCIPTVPC : Form {
   homeFullscreenButton = PlayerButton("Tela cheia (F11)", 145);
   homeFullscreenButton.Click += (sender,eventArgs) => ToggleFullscreen();
   footer.Controls.Add(homeFullscreenButton);
-  var account=PlayerButton("Conta / sair",130);account.Click+=(sender,eventArgs)=>{if(host==null){ShowLogin();return;}if(MessageBox.Show("Sair da conta e remover o login automático salvo?","XCIPTV-PC",MessageBoxButtons.YesNo)==DialogResult.Yes){host=null;password=null;catalogs.Clear();ForgetSession();pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();}};footer.Controls.Add(account);
+  var account = PlayerButton("🔐", 52);
+  DescribeIcon(account, "Sair da conta");
+  account.Click += (sender,eventArgs) => ConfirmSignOut();
+  footer.Controls.Add(account);
   var programUpdate=PlayerButton("Atualizar programa",150);programUpdate.Click+=async(sender,eventArgs)=>await CheckForProgramUpdate(true);footer.Controls.Add(programUpdate);
   var update=PlayerButton("Atualizar listas",135);update.Click+=async(sender,eventArgs)=>{catalogs.Clear();await RefreshCatalogs();};footer.Controls.Add(update);
   m3u = PlayerButton("Abrir lista M3U",135);
@@ -168,7 +213,7 @@ public partial class XCIPTVPC : Form {
    if (await ImportM3u()) ShowBrowser();
   };
   footer.Controls.Add(m3u);
-  var config=PlayerButton("Configurar VLC",135);config.Click+=(sender,eventArgs)=>SelectVlc();footer.Controls.Add(config);
+  var config=PlayerButton("⚙️",52);DescribeIcon(config,"Configurar VLC");config.Click+=(sender,eventArgs)=>SelectVlc();footer.Controls.Add(config);
   foreach(string name in new[]{"Multitelas","Catch-up","Gravações"}){var future=PlayerButton(name+" • em breve",145);future.Enabled=false;footer.Controls.Add(future);}homeScreen.Controls.Add(footer);
   homeScreen.Resize+=(sender,eventArgs)=>LayoutHome();
   homeButton=new HomeButton(){Location=new Point(20,14)};homeButton.Click+=(sender,eventArgs)=>ShowHome();Controls.Add(homeButton);
@@ -284,7 +329,7 @@ public partial class XCIPTVPC : Form {
   try{CatalogData data;if(!catalogs.TryGetValue(kind,out data)){data=await ReadCatalog(kind);catalogs[kind]=data;}entries=data.Entries;category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});foreach(var cat in data.Categories)category.Items.Add(new Entry(){Name=cat.Name,Id=cat.Id});category.SelectedIndex=0;SyncSidebar();Filter();Busy(false,entries.Count+" itens. Pesquise pelo nome ou escolha uma categoria.");}
   catch(Exception ex){Busy(false,"Não foi possível carregar o catálogo.");ShowError(ex);}
  }
- void Filter(){back.Visible=episodes;var cat=category.SelectedItem as Entry;items.BeginUpdate();items.Items.Clear();foreach(var e in entries){if(e.Name.IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)<0)continue;if(mode.SelectedIndex!=3&&!episodes&&cat!=null&&cat.Id!=""&&e.Category!=cat.Id)continue;if(mode.SelectedIndex==3&&!favorites.Contains(Key(e)))continue;items.Items.Add(e);}items.EndUpdate();items.ScrollToStart();}
+ void Filter(){items.BoldMovieTitles=kind=="vod";back.Visible=episodes;var cat=category.SelectedItem as Entry;items.BeginUpdate();items.Items.Clear();foreach(var e in entries){if(e.Name.IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)<0)continue;if(mode.SelectedIndex!=3&&!episodes&&cat!=null&&cat.Id!=""&&e.Category!=cat.Id)continue;if(mode.SelectedIndex==3&&!favorites.Contains(Key(e)))continue;items.Items.Add(e);}items.EndUpdate();items.ScrollToStart();}
  string Key(Entry e){return FavoriteKey(e,kind);}
  string FavoriteKey(Entry e,string section){e=e.FavoriteTarget??e;return (e.Url??host)+"|"+section+"|"+e.Id;}
  string FavoriteTitle(){return "FAVORITOS · "+(kind=="vod"?"FILMES":kind=="series"?"SÉRIES":"TV AO VIVO");}

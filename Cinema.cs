@@ -366,7 +366,133 @@ public partial class XCIPTVPC {
   RefreshOverlays();
  }
  void PlayerKeys(KeyEventArgs e){lastActivity=DateTime.UtcNow;if(e.KeyCode==Keys.Escape&&cinemaFullscreen){ExitFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.F11){ToggleFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.Space){TogglePause();e.Handled=true;}else if(e.KeyCode==Keys.Left){Jump(-60000);e.Handled=true;}else if(e.KeyCode==Keys.Right){Jump(60000);e.Handled=true;}}
+ enum RemoteDirection { None, Left, Up, Right, Down, Confirm }
+ Button remoteButton;
+ Control remoteRegion;
+
+ static RemoteDirection RemoteMediaCommand(int command) {
+  switch (command) {
+   case 12: case 50: return RemoteDirection.Left;
+   case 10: return RemoteDirection.Up;
+   case 11: case 49: return RemoteDirection.Right;
+   case 9: return RemoteDirection.Down;
+   case 14: return RemoteDirection.Confirm;
+   default: return RemoteDirection.None;
+  }
+ }
+
+ protected override void WndProc(ref Message message) {
+  if (message.Msg == 0x0319 && Enabled && ApplicationForeground()) {
+   int command = (int)((message.LParam.ToInt64() >> 16) & 0x0fff);
+   if (HandleRemote(RemoteMediaCommand(command))) {
+    message.Result = new IntPtr(1);
+    return;
+   }
+  }
+  base.WndProc(ref message);
+ }
+
+ IEnumerable<Button> RemoteButtons(Control parent) {
+  foreach (Control child in parent.Controls) {
+   if (!child.Visible || !child.Enabled) continue;
+   var button = child as Button;
+   if (button != null) yield return button;
+   else foreach (var descendant in RemoteButtons(child)) yield return descendant;
+  }
+ }
+
+ void SelectRemoteControl(Control target) {
+  if (remoteButton != null) {
+   remoteButton.FlatAppearance.BorderSize = remoteButton is HomeTile || remoteButton is GlyphButton ? 0 : 1;
+   remoteButton.Invalidate();
+  }
+  remoteRegion = target;
+  remoteButton = target as Button;
+  if (remoteButton == null) return;
+  remoteButton.FlatAppearance.BorderColor = Color.Gold;
+  remoteButton.FlatAppearance.BorderSize = 3;
+  remoteButton.Invalidate();
+  var scrolling = remoteButton.Parent as ScrollableControl;
+  if (scrolling != null && scrolling.AutoScroll) scrolling.ScrollControlIntoView(remoteButton);
+ }
+
+ bool HandleRemote(RemoteDirection direction) {
+  if (direction == RemoteDirection.None || !Enabled || closingCinema || recordDialog) return false;
+  if (busy) return true;
+  bool playing = playbackScreen.Visible;
+  bool catalogOpen = catalog.Visible;
+  if (playing) {
+   lastActivity = DateTime.UtcNow;
+   RefreshOverlays();
+  }
+  Control page = playing ? (Control)overlay : catalogOpen ? catalog :
+   homeScreen.Visible ? (Control)homeScreen : detailsScreen.Visible ? detailsScreen : loginScreen;
+  var candidates = RemoteButtons(page).Cast<Control>().ToList();
+  if (playing) candidates.AddRange(RemoteButtons(playerBack));
+  if (catalogOpen) {
+   if (categorySide.Visible && categorySide.Enabled && categorySide.Items.Count > 0) candidates.Add(categorySide);
+   if (items.Items.Count > 0) candidates.Add(items);
+  }
+  if (candidates.Count == 0) return false;
+  if (!candidates.Contains(remoteRegion)) {
+   SelectRemoteControl(playing ? pauseButton : catalogOpen && candidates.Contains(items) ? (Control)items : candidates[0]);
+   if (remoteRegion == items && items.SelectedItem == null) items.MoveRemoteSelection(0, 0);
+   if (direction != RemoteDirection.Confirm) return true;
+  }
+  if (direction == RemoteDirection.Confirm) {
+   if (remoteRegion == items) {
+    if (items.SelectedItem == null) items.MoveRemoteSelection(0, 0);
+    Play();
+   } else if (remoteRegion == categorySide) {
+    if (categorySide.SelectedIndex < 0) categorySide.SelectedIndex = 0;
+    if (items.Items.Count > 0) { SelectRemoteControl(items); items.MoveRemoteSelection(0, 0); }
+   } else if (remoteButton != null) remoteButton.PerformClick();
+   return true;
+  }
+  if (remoteRegion == categorySide && (direction == RemoteDirection.Up || direction == RemoteDirection.Down)) {
+   categorySide.Focus();
+   categorySide.SelectedIndex = Math.Max(0, Math.Min(categorySide.Items.Count - 1,
+    categorySide.SelectedIndex + (direction == RemoteDirection.Up ? -1 : 1)));
+   return true;
+  }
+  if (remoteRegion == items && (direction != RemoteDirection.Left || !items.RemoteAtLeftEdge)) {
+   items.MoveRemoteSelection(direction == RemoteDirection.Left ? -1 : direction == RemoteDirection.Right ? 1 : 0,
+    direction == RemoteDirection.Up ? -1 : direction == RemoteDirection.Down ? 1 : 0);
+   return true;
+  }
+  Rectangle bounds = remoteRegion.RectangleToScreen(remoteRegion.ClientRectangle);
+  int x = bounds.Left + bounds.Width / 2, y = bounds.Top + bounds.Height / 2;
+  Control best = null;
+  double bestScore = double.MaxValue;
+  bool horizontal = direction == RemoteDirection.Left || direction == RemoteDirection.Right;
+  foreach (Control candidate in candidates) {
+   if (candidate == remoteRegion) continue;
+   Rectangle rect = candidate.RectangleToScreen(candidate.ClientRectangle);
+   int dx = rect.Left + rect.Width / 2 - x, dy = rect.Top + rect.Height / 2 - y;
+   int forward = direction == RemoteDirection.Left ? -dx : direction == RemoteDirection.Right ? dx :
+    direction == RemoteDirection.Up ? -dy : dy;
+   if (forward <= 0) continue;
+   double score = forward + 3.0 * Math.Abs(horizontal ? dy : dx);
+   if (score < bestScore) { best = candidate; bestScore = score; }
+  }
+  if (best != null) {
+   SelectRemoteControl(best);
+   if (best == items && items.SelectedItem == null) items.MoveRemoteSelection(0, 0);
+   if (best == categorySide) categorySide.Focus();
+  }
+  return true;
+ }
+
  protected override bool ProcessCmdKey(ref Message message, Keys keyData) {
+  RemoteDirection remote = RemoteDirection.None;
+  switch (keyData) {
+   case Keys.MediaPreviousTrack: remote = RemoteDirection.Left; break;
+   case Keys.MediaNextTrack: remote = RemoteDirection.Right; break;
+   case Keys.VolumeUp: remote = RemoteDirection.Up; break;
+   case Keys.VolumeDown: remote = RemoteDirection.Down; break;
+   case Keys.MediaPlayPause: remote = RemoteDirection.Confirm; break;
+  }
+  if (HandleRemote(remote)) return true;
   if (keyData == Keys.F11 || (keyData == Keys.Escape && cinemaFullscreen)) {
    ToggleFullscreen();
    return true;
@@ -407,6 +533,7 @@ public partial class XCIPTVPC {
   SuspendLayout();
   target.SuspendLayout();
   try {
+   SelectRemoteControl(null);
    HideOverlays();
    if (!cinemaFullscreen && target != playbackScreen && playerWindowBorderSaved) {
     FormBorderStyle = normalWindowBorder;

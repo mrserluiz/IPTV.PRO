@@ -17,7 +17,7 @@ public class HomeTile : Button {
  public int Symbol;public string Caption;
  public HomeTile(string caption,int symbol){Caption=caption;Symbol=symbol;Text="";AccessibleName=caption;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;BackColor=Color.FromArgb(4,29,62);ForeColor=Color.White;Cursor=Cursors.Hand;}
  protected override void OnResize(EventArgs e){base.OnResize(e);using(var path=new GraphicsPath()){path.AddEllipse(1,1,Math.Max(1,Width-2),Math.Max(1,Height-2));var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
- protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;using(var fill=new SolidBrush(BackColor))g.FillEllipse(fill,1,1,Width-3,Height-3);using(var edge=new Pen(Color.FromArgb(135,186,220),1.5f))g.DrawEllipse(edge,2,2,Width-5,Height-5);
+ protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;using(var fill=new SolidBrush(BackColor))g.FillEllipse(fill,1,1,Width-3,Height-3);using(var edge=new Pen(FlatAppearance.BorderSize>0?Color.Gold:Color.FromArgb(135,186,220),FlatAppearance.BorderSize>0?5f:1.5f))g.DrawEllipse(edge,2,2,Width-5,Height-5);
   var saved=g.Save();float scale=Width/190f;g.ScaleTransform(scale,scale);int x=59,y=51;using(var pen=new Pen(Color.FromArgb(209,232,246),3)){g.DrawRectangle(pen,x,y,72,49);if(Symbol==2)for(int i=0;i<3;i++){g.DrawRectangle(pen,x+3,y+4+i*15,9,10);g.DrawRectangle(pen,x+60,y+4+i*15,9,10);}if(Symbol==1)for(int i=0;i<3;i++){g.DrawLine(pen,x+12,y+12+i*11,x+19,y+12+i*11);g.DrawLine(pen,x+25,y+12+i*11,x+60,y+12+i*11);}if(Symbol>=2)g.DrawPolygon(pen,new[]{new Point(x+29,y+13),new Point(x+29,y+37),new Point(x+48,y+25)});if(Symbol!=2){g.DrawLine(pen,x+36,y+50,x+36,y+60);g.DrawLine(pen,x+18,y+61,x+54,y+61);}}using(var font=new Font("Segoe UI Light",16))using(var brush=new SolidBrush(ForeColor))using(var format=new StringFormat(){Alignment=StringAlignment.Center})g.DrawString(Caption,font,brush,new RectangleF(0,136,190,40),format);g.Restore(saved);
  }
 }
@@ -72,6 +72,18 @@ public class MediaGrid : Panel {
    QueueVisibleArtwork();
   }
  }
+ internal bool RemoteAtLeftEdge { get { return selection < 0 || selection % Columns == 0; } }
+ internal void MoveRemoteSelection(int horizontal, int vertical) {
+  if (Items.Count == 0) return;
+  int next = selection < 0 ? 0 : selection + horizontal + vertical * Columns;
+  selection = Math.Max(0, Math.Min(Items.Count - 1, next));
+  int top = selection / Columns * CellHeight;
+  if (top < scrollY) scrollY = top;
+  else if (top + CellHeight > scrollY + ClientSize.Height)
+   scrollY = Math.Min(MaxScroll, top + CellHeight - ClientSize.Height);
+  Invalidate();
+ }
+
  int Columns { get { return Math.Max(1, ClientSize.Width / (largeCards ? 245 : 170)); } }
  int CellWidth { get { return Math.Max(1, ClientSize.Width / Columns); } }
  int CellHeight { get { return largeCards ? 302 : 214; } }

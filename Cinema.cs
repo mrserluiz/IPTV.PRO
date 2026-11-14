@@ -375,7 +375,9 @@ public partial class XCIPTVPC {
   RefreshOverlays();
  }
  void PlayerKeys(KeyEventArgs e){lastActivity=DateTime.UtcNow;if(e.KeyCode==Keys.Escape&&cinemaFullscreen){ExitFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.F11){ToggleFullscreen();e.Handled=true;}else if(e.KeyCode==Keys.Space){TogglePause();e.Handled=true;}else if(e.KeyCode==Keys.Left){Jump(-60000);e.Handled=true;}else if(e.KeyCode==Keys.Right){Jump(60000);e.Handled=true;}}
- enum RemoteDirection { None, Left, Up, Right, Down, Confirm }
+ enum RemoteDirection { None, Left, Up, Right, Down, Confirm, Tv, Player, Mouse }
+ enum RemoteMode { Tv, Player, Mouse }
+ RemoteMode remoteMode = RemoteMode.Tv;
  Button remoteButton;
  Control remoteRegion;
 
@@ -386,6 +388,9 @@ public partial class XCIPTVPC {
    case 11: case 49: return RemoteDirection.Right;
    case 9: return RemoteDirection.Down;
    case 14: return RemoteDirection.Confirm;
+   case 13: return RemoteDirection.Tv;
+   case 16: return RemoteDirection.Player;
+   case 31: return RemoteDirection.Mouse;
    default: return RemoteDirection.None;
   }
  }
@@ -427,7 +432,33 @@ public partial class XCIPTVPC {
 
  bool HandleRemote(RemoteDirection direction) {
   if (direction == RemoteDirection.None || !Enabled || closingCinema || recordDialog) return false;
+  if (direction == RemoteDirection.Tv || direction == RemoteDirection.Player || direction == RemoteDirection.Mouse) {
+   remoteMode = direction == RemoteDirection.Tv ? RemoteMode.Tv :
+    direction == RemoteDirection.Player ? RemoteMode.Player : RemoteMode.Mouse;
+   SelectRemoteControl(null);
+   Text = "XCIPTV-PC — Controle: " + (remoteMode == RemoteMode.Tv ? "TV" : remoteMode == RemoteMode.Player ? "Player" : "Mouse");
+   if (playbackScreen.Visible) {
+    lastActivity = DateTime.UtcNow;
+    RefreshOverlays();
+    buttonHints.Show("Modo " + remoteMode, overlay, 16, 12, 1700);
+   }
+   return true;
+  }
+  if (remoteMode == RemoteMode.Mouse) return false;
   if (busy) return true;
+  if (remoteMode == RemoteMode.Player) {
+   if (!playbackScreen.Visible || engine == null) return false;
+   lastActivity = DateTime.UtcNow;
+   RefreshOverlays();
+   switch (direction) {
+    case RemoteDirection.Up: volume.Value = Math.Min(volume.Maximum, volume.Value + 5); break;
+    case RemoteDirection.Down: volume.Value = Math.Max(volume.Minimum, volume.Value - 5); break;
+    case RemoteDirection.Left: Jump(-60000); break;
+    case RemoteDirection.Right: Jump(60000); break;
+    case RemoteDirection.Confirm: TogglePause(); break;
+   }
+   return true;
+  }
   bool playing = playbackScreen.Visible;
   bool catalogOpen = catalog.Visible;
   if (playing) {
@@ -503,6 +534,11 @@ public partial class XCIPTVPC {
    case Keys.VolumeUp: return RemoteDirection.Up;
    case Keys.VolumeDown: return RemoteDirection.Down;
    case Keys.MediaPlayPause: return RemoteDirection.Confirm;
+   case Keys.MediaStop: return RemoteDirection.Tv;
+   case Keys.SelectMedia: return RemoteDirection.Player;
+   case Keys.F6: return RemoteDirection.Tv;
+   case Keys.F7: return RemoteDirection.Player;
+   case Keys.F8: return RemoteDirection.Mouse;
    default: return RemoteDirection.None;
   }
  }
@@ -528,15 +564,19 @@ public partial class XCIPTVPC {
  IntPtr RoutePlayerMediaKey(int code, IntPtr message, IntPtr data) {
   if (code >= 0) {
    var key = (Keys)System.Runtime.InteropServices.Marshal.ReadInt32(data);
-   var direction = RemoteKey(key);
+   var direction = key >= Keys.F6 && key <= Keys.F8 ? RemoteDirection.None : RemoteKey(key);
+   int flags = System.Runtime.InteropServices.Marshal.ReadInt32(data, 8);
+   if (key == Keys.F4 && (flags & 0x30) == 0x30) direction = RemoteDirection.Mouse;
+   if (key == Keys.F4 && capturedMediaKeys.Contains(key)) direction = RemoteDirection.Mouse;
    if (direction != RemoteDirection.None) {
     int eventType = message.ToInt32();
     if ((eventType == 0x101 || eventType == 0x105) && capturedMediaKeys.Remove(key)) return new IntPtr(1);
-    if ((eventType == 0x100 || eventType == 0x104) && playbackScreen.Visible &&
+    if ((eventType == 0x100 || eventType == 0x104) &&
+        (direction >= RemoteDirection.Tv || (playbackScreen.Visible && remoteMode != RemoteMode.Mouse)) &&
         Enabled && !recordDialog && !closingCinema && ApplicationForeground()) {
-     if (capturedMediaKeys.Add(key) || direction != RemoteDirection.Confirm)
+     if (capturedMediaKeys.Add(key) || (direction < RemoteDirection.Confirm))
       BeginInvoke(new Action(() => {
-       if (playbackScreen.Visible && ApplicationForeground()) HandleRemote(direction);
+       if (ApplicationForeground()) HandleRemote(direction);
       }));
      return new IntPtr(1);
     }

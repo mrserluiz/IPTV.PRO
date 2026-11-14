@@ -54,7 +54,7 @@ public partial class XCIPTVPC {
  bool borderlessPlayerWindow;
  bool Immersive{get{return cinemaFullscreen||WindowState==FormWindowState.Maximized;}}
  void BuildCinema(){KeyPreview=true;InitializeNavigation();
-  detailsScreen=new Panel(){Dock=DockStyle.Fill,Visible=false,BackgroundImageLayout=ImageLayout.Stretch,BackColor=Color.FromArgb(13,25,34)};Controls.Add(detailsScreen);
+  detailsScreen=new BufferedPage(){Dock=DockStyle.Fill,Visible=false,BackgroundImageLayout=ImageLayout.Stretch,BackColor=Color.FromArgb(13,25,34)};Controls.Add(detailsScreen);
   detailsCover=new PictureBox(){SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.Transparent};detailsScreen.Controls.Add(detailsCover);
   detailsName=DetailLabel(28,Color.White);detailsRating=DetailLabel(16,Color.Gold);detailsDate=DetailLabel(13,Color.LightBlue);detailsGenre=DetailLabel(14,Color.White);detailsCast=DetailLabel(12,Color.YellowGreen);detailsPlot=DetailLabel(14,Color.White);detailsDirector=DetailLabel(13,Color.LightSteelBlue);
   detailsActions=new FlowLayoutPanel(){Dock=DockStyle.Bottom,Height=110,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(20,0,20,5),BackColor=Color.FromArgb(14,22,29)};
@@ -307,6 +307,7 @@ public partial class XCIPTVPC {
   FreezeWindow(true);
   try {
    cinemaFullscreen = true;
+   UpdateHomeFullscreenButton();
    UpdateCatalogScale();
    fullscreenButton.Glyph = "window";
    fullscreenButton.Invalidate();
@@ -325,6 +326,7 @@ public partial class XCIPTVPC {
   FreezeWindow(true);
   try {
    cinemaFullscreen = false;
+   UpdateHomeFullscreenButton();
    UpdateCatalogScale();
    fullscreenButton.Glyph = "fullscreen";
    fullscreenButton.Invalidate();
@@ -354,12 +356,51 @@ public partial class XCIPTVPC {
  static string SafeFileName(string name){foreach(char c in Path.GetInvalidFileNameChars())name=name.Replace(c,'_');return name.Length>100?name.Substring(0,100):name;}
  void DiscardRecording(){if(recorder!=null){recorder.Dispose();recorder=null;}try{if(recordPath!=null&&File.Exists(recordPath))File.Delete(recordPath);}catch{}recordPath=null;}
  void CloseCinema(){SetPlayerCursorHidden(false);if(recorder!=null)FinishRecording();if(wheelRouter!=null)wheelRouter.Dispose();closingCinema=true;if(cinemaTimer!=null)cinemaTimer.Dispose();if(overlay!=null)overlay.Dispose();if(playerBack!=null)playerBack.Dispose();scrollHint.Dispose();buttonHints.Dispose();}
- [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="SendMessageW")]static extern IntPtr SendRedraw(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
  [System.Runtime.InteropServices.DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr hwnd,int attribute,ref int value,int size);
  void DisableWindowAnimations(){try{int disabled=1;DwmSetWindowAttribute(Handle,3,ref disabled,4);}catch{}}
  int sceneUpdateDepth;
- void FreezeWindow(bool freeze){if(freeze){sceneUpdateDepth++;if(IsHandleCreated&&sceneUpdateDepth==1)SendRedraw(Handle,0x000B,IntPtr.Zero,IntPtr.Zero);}else{sceneUpdateDepth=Math.Max(0,sceneUpdateDepth-1);if(IsHandleCreated&&sceneUpdateDepth==0){SendRedraw(Handle,0x000B,new IntPtr(1),IntPtr.Zero);Invalidate(true);Update();}}}
- void ChangePage(Control target,Action prepare){FreezeWindow(true);SuspendLayout();try{if(!cinemaFullscreen&&target!=playbackScreen&&playerWindowBorderSaved){FormBorderStyle=normalWindowBorder;playerWindowBorderSaved=false;}target.Visible=true;target.BringToFront();foreach(Control page in new Control[]{catalog,loginScreen,loadingScreen,homeScreen,playbackScreen,detailsScreen})if(page!=null&&page!=target)page.Visible=false;HideOverlays();AcceptButton=null;prepare();target.PerformLayout();}finally{ResumeLayout(true);FreezeWindow(false);}}
+ // Buffer the WinForms pages independently of the native VLC surface.
+ sealed class BufferedPage : Panel {
+  public BufferedPage() { DoubleBuffered = true; }
+  protected override CreateParams CreateParams {
+   get { var parameters = base.CreateParams; parameters.ExStyle |= 0x02000000; return parameters; }
+  }
+ }
+
+ sealed class BufferedCatalog : TableLayoutPanel {
+  public BufferedCatalog() { DoubleBuffered = true; }
+  protected override CreateParams CreateParams {
+   get { var parameters = base.CreateParams; parameters.ExStyle |= 0x02000000; return parameters; }
+  }
+ }
+
+ void FreezeWindow(bool freeze) {
+  sceneUpdateDepth = freeze ? sceneUpdateDepth + 1 : Math.Max(0, sceneUpdateDepth - 1);
+  if (sceneUpdateDepth == 0) Invalidate(true);
+ }
+
+ void ChangePage(Control target, Action prepare) {
+  FreezeWindow(true);
+  SuspendLayout();
+  target.SuspendLayout();
+  try {
+   HideOverlays();
+   if (!cinemaFullscreen && target != playbackScreen && playerWindowBorderSaved) {
+    FormBorderStyle = normalWindowBorder;
+    playerWindowBorderSaved = false;
+   }
+   AcceptButton = null;
+   target.BringToFront();
+   target.Visible = true;
+   prepare();
+   foreach (Control page in new Control[] { catalog, loginScreen, loadingScreen, homeScreen, playbackScreen, detailsScreen })
+    if (page != null && page != target) page.Visible = false;
+  } finally {
+   target.ResumeLayout(true);
+   ResumeLayout(true);
+   FreezeWindow(false);
+  }
+ }
  void InitializeNavigation(){HandleCreated+=(s,e)=>DisableWindowAnimations();if(IsHandleCreated)DisableWindowAnimations();var context=new ContextMenuStrip(){ShowImageMargin=false};var item=new ToolStripMenuItem();context.Items.Add(item);var schedule=context.Items.Add("Ver programação");schedule.Click+=async(s,e)=>await Guide();Entry target=null;string section=null;context.Opening+=(s,e)=>{target=items.SelectedItem as Entry;section=kind;schedule.Visible=kind=="live"&&host!=null&&target!=null&&target.Url==null;if(target==null){e.Cancel=true;return;}item.Text=favorites.Contains(FavoriteKey(target,section))?"☆ Remover dos favoritos":"★ Adicionar aos favoritos";};item.Click+=(s,e)=>{if(target!=null)ToggleFavorite(target,section);};items.ContextMenuStrip=context;FormClosed+=(s,e)=>context.Dispose();}
  void FavoriteNavigationTest(){var oldFavorites=favorites;var oldEntries=entries;string oldKind=kind;int oldMode=mode.SelectedIndex;try{favorites=new HashSet<string>();var one=new Entry(){Id="scope-test",Name="Um",Category="one"};var two=new Entry(){Id="other-test",Name="Dois",Category="two"};if(FavoriteKey(one,"live")==FavoriteKey(one,"vod")||FavoriteKey(one,"vod")==FavoriteKey(one,"series"))throw new Exception("Favorite sections overlap");favorites.Add(FavoriteKey(two,"vod"));entries=new List<Entry>{one,two};kind="vod";suppressMode=true;mode.SelectedIndex=3;suppressMode=false;Filter();if(items.Items.Count!=1||items.Items[0]!=two)throw new Exception("Favorites still limited to selected genre");items.SelectAt(new Point(20,20));if(items.SelectedItem!=two)throw new Exception("Context target selection failed");kind="live";Filter();if(items.Items.Count!=0)throw new Exception("Film favorite leaked into live TV");var episode=new Entry(){Id="episode",FavoriteTarget=one};if(FavoriteKey(episode,"series")!=FavoriteKey(one,"series"))throw new Exception("Series favorite target failed");}finally{favorites=oldFavorites;entries=oldEntries;kind=oldKind;suppressMode=true;mode.SelectedIndex=oldMode;suppressMode=false;Filter();}TestTrace("section favorites and context target passed");}
  void InputRegressionTest(){FavoriteNavigationTest();

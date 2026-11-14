@@ -44,7 +44,7 @@ public partial class XCIPTVPC : Form {
   BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
   using(var iconStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon")){if(iconStream!=null)Icon=new Icon(iconStream);}
   BackColor=Color.FromArgb(12,65,140);ForeColor=Color.White;Font=new Font("Segoe UI",10);
-  var root=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(16)};
+  var root=new BufferedCatalog(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(16)};
   root.RowStyles.Add(new RowStyle(SizeType.Absolute,85));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,32));Controls.Add(root);
   catalog=root;root.BackColor=Color.Transparent;
   var header=new Panel(){Dock=DockStyle.Fill,BackColor=Color.FromArgb(8,38,79)};
@@ -88,7 +88,7 @@ public partial class XCIPTVPC : Form {
   return panel;
  }
  void BuildLogin(){
-  loginScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent};Controls.Add(loginScreen);
+  loginScreen=new BufferedPage(){Dock=DockStyle.Fill,BackColor=Color.Transparent};Controls.Add(loginScreen);
   var card=new TableLayoutPanel(){Size=new Size(470,530),ColumnCount=1,RowCount=10,BackColor=Color.Transparent};
   foreach(int height in new[]{130,38,62,62,62,62,28,32,32,22})card.RowStyles.Add(new RowStyle(SizeType.Absolute,height));card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
   card.Controls.Add(new PictureBox(){Image=logoImage,Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,Margin=new Padding(0,0,0,12)},0,0);
@@ -102,9 +102,15 @@ public partial class XCIPTVPC : Form {
   loginScreen.Controls.Add(card);loginScreen.Resize+=(sender,eventArgs)=>{card.Width=Math.Min(470,Math.Max(300,loginScreen.ClientSize.Width-48));card.Left=(loginScreen.ClientSize.Width-card.Width)/2;card.Top=Math.Max(8,(loginScreen.ClientSize.Height-card.Height)/2);};
  }
  void CenterScreens(){foreach(var panel in new[]{loginScreen,loadingScreen}){if(panel==null||panel.Controls.Count==0)continue;var card=panel.Controls.OfType<TableLayoutPanel>().FirstOrDefault();if(card==null)continue;card.Width=Math.Min(panel==loginScreen?470:820,Math.Max(300,panel.ClientSize.Width-48));card.Left=Math.Max(0,(panel.ClientSize.Width-card.Width)/2);card.Top=Math.Max(8,(panel.ClientSize.Height-card.Height)/2);}}
- void ShowLogin(){HideOverlays();if(detailsScreen!=null)detailsScreen.Visible=false;if(homeScreen!=null)homeScreen.Visible=false;if(playbackScreen!=null)playbackScreen.Visible=false;catalog.Visible=false;if(loadingScreen!=null)loadingScreen.Visible=false;loginScreen.Visible=true;loginScreen.BringToFront();CenterScreens();AcceptButton=login;if(homeButton!=null){AttachHome(loginScreen);}}
+ void ShowLogin() {
+  ChangePage(loginScreen, () => {
+   CenterScreens();
+   AcceptButton = login;
+   if (homeButton != null) AttachHome(loginScreen);
+  });
+ }
  void BuildLoading(){
-  loadingScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(loadingScreen);
+  loadingScreen=new BufferedPage(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(loadingScreen);
   var card=new TableLayoutPanel(){Size=new Size(820,300),ColumnCount=1,RowCount=5,BackColor=Color.Transparent};foreach(int height in new[]{52,100,26,52,52})card.RowStyles.Add(new RowStyle(SizeType.Absolute,height));card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
   card.Controls.Add(new Label(){Text="Atualizando conteúdo de mídia",BackColor=Color.FromArgb(237,243,249),ForeColor=Color.FromArgb(20,50,80),Font=new Font("Segoe UI Light",17),TextAlign=ContentAlignment.MiddleCenter,Dock=DockStyle.Fill});
   var stages=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=4,RowCount=1,Margin=new Padding(0)};loadingStages=new Label[4];string[] names={"TV AO VIVO","FILMES","SÉRIES","GUIA DE TV"};for(int i=0;i<4;i++){stages.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));loadingStages[i]=new Label(){Text=names[i]+"\n"+(i==0?"Aguardando…":"Ao abrir a seção"),Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(6,34,64),ForeColor=Color.White,Margin=new Padding(1,0,1,0),Font=new Font("Segoe UI",11)};stages.Controls.Add(loadingStages[i]);}card.Controls.Add(stages);
@@ -116,7 +122,7 @@ public partial class XCIPTVPC : Form {
  void SetLoading(int index,string text){string[] names={"TV AO VIVO","FILMES","SÉRIES","GUIA DE TV"};loadingStages[index].Text=names[index]+"\n"+text;}
  void Snapshot(string name){TestTrace("snapshot "+name);PerformLayout();string dir=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews");Directory.CreateDirectory(dir);using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(0,0,Width,Height));bitmap.Save(Path.Combine(dir,name+".png"));}}
  void CheckLayout(){CenterScreens();if(!loginScreen.Visible||catalog.Visible||!loginScreen.Bounds.Contains(loginScreen.Controls.OfType<TableLayoutPanel>().First().Bounds))throw new Exception("Login layout is outside the window");foreach(Control input in new Control[]{server,user,pass,login})if(!input.Visible||input.Width<100||input.Height<15)throw new Exception("Login control is not usable");var toggle=pass.Parent.Controls.OfType<Button>().Single();toggle.PerformClick();if(pass.UseSystemPasswordChar)throw new Exception("Password reveal failed");toggle.PerformClick();Snapshot("login");
-  HidePages();loadingScreen.Visible=true;loadingScreen.BringToFront();AttachHome(loadingScreen);CenterScreens();SetLoading(0,"SUCESSO!");SetLoading(1,"SUCESSO!");SetLoading(2,"Carregando…");Snapshot("loading");homeButton.PerformClick();if(!homeScreen.Visible||homeButton.Visible)throw new Exception("Home route failed");Snapshot("home");
+  HidePages();loadingScreen.Visible=true;loadingScreen.BringToFront();AttachHome(loadingScreen);CenterScreens();SetLoading(0,"SUCESSO!");SetLoading(1,"SUCESSO!");SetLoading(2,"Carregando…");Snapshot("loading");homeButton.PerformClick();if(!homeScreen.Visible||homeButton.Visible)throw new Exception("Home route failed");Snapshot("home");homeFullscreenButton.PerformClick();if(!cinemaFullscreen||homeFullscreenButton.Text!="Sair da tela cheia")throw new Exception("Home fullscreen control failed");homeFullscreenButton.PerformClick();if(cinemaFullscreen||!homeScreen.Visible)throw new Exception("Home fullscreen exit failed");
   entries=Enumerable.Range(1,30).Select(i=>new Entry(){Name="Canal de demonstração "+i,Id=i.ToString(),Category=i%2==0?"news":"sports"}).ToList();category.Items.Clear();category.Items.Add(new Entry(){Name="Todas as categorias",Id=""});category.Items.Add(new Entry(){Name="Esportes",Id="sports"});category.Items.Add(new Entry(){Name="Notícias",Id="news"});category.SelectedIndex=0;SyncSidebar();Filter();ShowBrowser();if(!homeButton.Visible||items.Items.Count!=30)throw new Exception("Browser grid failed");Snapshot("catalog");items.ScrollWheel(-1200);if(items.ScrollOffset==0)throw new Exception("Catalog did not scroll for genre test");category.SelectedIndex=2;if(items.ScrollOffset!=0||items.SelectedItem!=null||((Entry)items.Items[0]).Id!="2")throw new Exception("Genre did not reset to first media");items.ScrollWheel(-1200);category.SelectedIndex=1;if(items.ScrollOffset!=0||((Entry)items.Items[0]).Id!="1")throw new Exception("Reverse genre reset failed");if(items.Items.Count!=15)throw new Exception("Category filter failed");search.Text="demonstração 1";if(items.Items.Count!=6)throw new Exception("Search filter failed");search.Clear();homeButton.PerformClick();if(!homeScreen.Visible||homeButton.Visible)throw new Exception("Catalog home failed");ShowPlayback();if(playerBack==null||!playerBack.Visible)throw new Exception("Playback back missing");Snapshot("player");CinemaLayoutTest();ShowHome();if(!homeScreen.Visible)throw new Exception("Player home failed");entries.Clear();items.Items.Clear();
  }
  void HidePages(){if(detailsScreen!=null)detailsScreen.Visible=false;HideOverlays();catalog.Visible=false;loginScreen.Visible=false;loadingScreen.Visible=false;if(homeScreen!=null)homeScreen.Visible=false;if(playbackScreen!=null)playbackScreen.Visible=false;AcceptButton=null;}
@@ -126,6 +132,11 @@ public partial class XCIPTVPC : Form {
  void ShowPlayback(){videoInputReadyAt=DateTime.UtcNow.AddMilliseconds(250);videoMouseDown=false;NativePointer.ButtonState();if(!playbackScreen.Visible)playerReturnPage=detailsScreen!=null&&detailsScreen.Visible?detailsScreen:(Control)catalog;ChangePage(playbackScreen,()=>{homeButton.Visible=false;playbackScreen.Controls.Cast<Control>().First(x=>x.Dock==DockStyle.Top).Visible=false;playbackHost.Padding=Padding.Empty;ApplyPlayerWindowBorder();});lastActivity=DateTime.UtcNow;RefreshOverlays();}
  async Task OpenSection(int index,bool epg){if(busy)return;if(host==null&&entries.Count==0){ShowLogin();return;}guideMode=epg;suppressMode=true;mode.SelectedIndex=index;suppressMode=false;search.Clear();if(host!=null)await LoadList();else Filter();ShowBrowser();}
  void SyncSidebar(){if(categorySide==null||syncCategories)return;syncCategories=true;categorySide.BeginUpdate();categorySide.Items.Clear();categorySide.Items.Add(new Entry(){Name=FavoriteTitle()+" ("+FavoriteCount()+")",Id="__favorites"});for(int i=0;i<category.Items.Count;i++){var cat=category.Items[i] as Entry;if(cat==null)continue;int count=cat.Id==""?entries.Count:entries.Count(x=>x.Category==cat.Id);categorySide.Items.Add(new Entry(){Name=cat.Name+" ("+count+")",Id=cat.Id});}categorySide.SelectedIndex=mode.SelectedIndex==3||category.Items.Count==0?0:Math.Min(categorySide.Items.Count-1,Math.Max(1,category.SelectedIndex+1));categorySide.EndUpdate();syncCategories=false;}
+ Button homeFullscreenButton;
+ void UpdateHomeFullscreenButton() {
+  if (homeFullscreenButton != null)
+   homeFullscreenButton.Text = cinemaFullscreen ? "Sair da tela cheia" : "Tela cheia (F11)";
+ }
  void LayoutHome(){var homeLogo=homeScreen.Controls.OfType<PictureBox>().FirstOrDefault();var tiles=homeScreen.Controls.OfType<FlowLayoutPanel>().FirstOrDefault(x=>x.Dock==DockStyle.None);if(homeLogo==null||tiles==null)return;homeLogo.Left=(homeScreen.ClientSize.Width-homeLogo.Width)/2;homeLogo.Top=40;int width=Math.Max(120,Math.Min(380,(homeScreen.ClientSize.Width-100)/4-20));foreach(Control tile in tiles.Controls)tile.Size=new Size(width,width);tiles.Size=new Size(4*(width+20),width+20);tiles.Left=(homeScreen.ClientSize.Width-tiles.Width)/2;tiles.Top=Math.Max(170,(homeScreen.ClientSize.Height-tiles.Height)/2);}
  Font fullscreenCategoryFont;
  void UpdateCatalogScale() {
@@ -141,11 +152,14 @@ public partial class XCIPTVPC : Form {
   categorySide.SelectedIndexChanged+=(sender,eventArgs)=>{if(syncCategories)return;int index=categorySide.SelectedIndex;if(index<0)return;if(index==0){suppressMode=true;mode.SelectedIndex=3;suppressMode=false;search.Clear();Filter();}else{suppressMode=true;if(mode.SelectedIndex==3)mode.SelectedIndex=kind=="vod"?1:kind=="series"?2:0;suppressMode=false;category.SelectedIndex=index-1;Filter();}};
   videoSplit.Panel1.Controls.Add(categorySide);videoSplit.Panel2.Controls.Add(items);category.SelectedIndexChanged+=(sender,eventArgs)=>SyncSidebar();search.AccessibleName="Pesquisar canais, filmes ou séries";search.HandleCreated+=(sender,eventArgs)=>SendMessage(search.Handle,0x1501,new IntPtr(1),"Pesquisar canais, filmes ou séries…");
   playbackScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(playbackScreen);var playbackHeader=new Panel(){Dock=DockStyle.Top,Height=80,BackColor=Color.FromArgb(8,38,79)};playbackHeader.Controls.Add(new Label(){Text="REPRODUÇÃO",Location=new Point(102,24),AutoSize=true,Font=new Font("Segoe UI",17),ForeColor=Color.White});var returnList=PlayerButton("Voltar à lista",145);returnList.Dock=DockStyle.Right;returnList.Click+=(sender,eventArgs)=>{StopPlayback();ShowBrowser();};playbackHeader.Controls.Add(returnList);playbackHost=new Panel(){Dock=DockStyle.Fill,Padding=new Padding(18),BackColor=Color.Transparent};playbackHost.Controls.Add(playerPane);playbackScreen.Controls.Add(playbackHost);playbackScreen.Controls.Add(playbackHeader);
-  homeScreen=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(homeScreen);
+  homeScreen=new BufferedPage(){Dock=DockStyle.Fill,BackColor=Color.Transparent,Visible=false};Controls.Add(homeScreen);
   var homeLogo=new PictureBox(){Image=logoImage,SizeMode=PictureBoxSizeMode.Zoom,Size=new Size(116,116)};homeScreen.Controls.Add(homeLogo);
   var welcome=new Label(){Text="XCIPTV-PC",AutoSize=true,Font=new Font("Segoe UI Light",18),ForeColor=Color.White,Location=new Point(24,24)};homeScreen.Controls.Add(welcome);
   var tiles=new FlowLayoutPanel(){Size=new Size(840,210),BackColor=Color.Transparent,WrapContents=false};string[] captions={"TV AO VIVO","GUIA DA TV","FILMES","SÉRIES"};for(int i=0;i<4;i++){int chosen=i;var tile=new HomeTile(captions[i],i){Size=new Size(190,190),Margin=new Padding(10)};tile.Click+=async(sender,eventArgs)=>await OpenSection(chosen==2?1:chosen==3?2:0,chosen==1);tiles.Controls.Add(tile);}homeScreen.Controls.Add(tiles);
   var footer=new FlowLayoutPanel(){Dock=DockStyle.Bottom,Height=100,Padding=new Padding(20,16,20,8),WrapContents=false,AutoScroll=true};
+  homeFullscreenButton = PlayerButton("Tela cheia (F11)", 145);
+  homeFullscreenButton.Click += (sender,eventArgs) => ToggleFullscreen();
+  footer.Controls.Add(homeFullscreenButton);
   var account=PlayerButton("Conta / sair",130);account.Click+=(sender,eventArgs)=>{if(host==null){ShowLogin();return;}if(MessageBox.Show("Sair da conta e remover o login automático salvo?","XCIPTV-PC",MessageBoxButtons.YesNo)==DialogResult.Yes){host=null;password=null;catalogs.Clear();ForgetSession();pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();}};footer.Controls.Add(account);
   var programUpdate=PlayerButton("Atualizar programa",150);programUpdate.Click+=async(sender,eventArgs)=>await CheckForProgramUpdate(true);footer.Controls.Add(programUpdate);
   var update=PlayerButton("Atualizar listas",135);update.Click+=async(sender,eventArgs)=>{catalogs.Clear();await RefreshCatalogs();};footer.Controls.Add(update);

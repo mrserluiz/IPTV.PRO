@@ -117,7 +117,7 @@ public partial class XCIPTVPC : Form {
  }
  void HidePages(){if(detailsScreen!=null)detailsScreen.Visible=false;HideOverlays();catalog.Visible=false;loginScreen.Visible=false;loadingScreen.Visible=false;if(homeScreen!=null)homeScreen.Visible=false;if(playbackScreen!=null)playbackScreen.Visible=false;AcceptButton=null;}
  void AttachHome(Control target){homeButton.Parent=target;homeButton.Location=new Point(12,10);homeButton.Visible=true;homeButton.BringToFront();}
- void ShowHome(){if(cinemaFullscreen)ExitFullscreen();StopPlayback();ChangePage(homeScreen,()=>{LayoutHome();homeButton.Visible=false;});}
+ void ShowHome(){StopPlayback();ChangePage(homeScreen,()=>{LayoutHome();homeButton.Visible=false;});}
  void ShowBrowser(){ChangePage(catalog,()=>AttachHome(catalog.GetControlFromPosition(0,0)));}
  void ShowPlayback(){videoInputReadyAt=DateTime.UtcNow.AddMilliseconds(250);videoMouseDown=false;NativePointer.ButtonState();if(!playbackScreen.Visible)playerReturnPage=detailsScreen!=null&&detailsScreen.Visible?detailsScreen:(Control)catalog;ChangePage(playbackScreen,()=>{homeButton.Visible=false;playbackScreen.Controls.Cast<Control>().First(x=>x.Dock==DockStyle.Top).Visible=false;playbackHost.Padding=Padding.Empty;ApplyPlayerWindowBorder();});lastActivity=DateTime.UtcNow;RefreshOverlays();}
  async Task OpenSection(int index,bool epg){if(busy)return;if(host==null&&entries.Count==0){ShowLogin();return;}guideMode=epg;suppressMode=true;mode.SelectedIndex=index;suppressMode=false;search.Clear();if(host!=null)await LoadList();else Filter();ShowBrowser();}

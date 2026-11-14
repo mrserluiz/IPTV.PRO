@@ -110,7 +110,42 @@ public partial class XCIPTVPC {
  void Jump(long amount){if(engine!=null&&engine.Seekable&&engine.Length>0&&recorder==null)engine.Position=(float)Math.Max(0,Math.Min(engine.Length-1,engine.Time+amount))/engine.Length;}
  void CycleAspect(){if(engine==null)return;aspectMode=(aspectMode+1)%5;string[] aspects={"","16:9","4:3","",""};float[] zoom={0,0,0,1.25f,1.5f};engine.Aspect(aspects[aspectMode],zoom[aspectMode]);buttonHints.Show(new[]{"Proporção original","16:9","4:3","Zoom 125%","Zoom 150%"}[aspectMode],aspectButton,0,-25,2000);}
  void ShowSubtitles(){if(engine==null)return;var menu=new ContextMenuStrip();menu.Items.Add("Desativar legendas",null,(s,e)=>engine.Subtitle(-1));foreach(var track in engine.Subtitles()){int id=track.Key;if(id<0)continue;menu.Items.Add(track.Value,null,(s,e)=>engine.Subtitle(id));}if(menu.Items.Count==1)menu.Items.Add("Sem legendas nesta mídia").Enabled=false;menu.Items.Add("Abrir arquivo de legenda…",null,(s,e)=>{using(var dialog=new OpenFileDialog(){Filter="Legendas|*.srt;*.ass;*.ssa;*.vtt;*.sub|Todos os arquivos|*.*"})if(dialog.ShowDialog(this)==DialogResult.OK)engine.AddSubtitle(new Uri(dialog.FileName).AbsoluteUri);});menu.Closed+=(s,e)=>{lastActivity=DateTime.UtcNow;};menu.Show(subtitleButton,new Point(0,0));}
- void ShowPlayerSettings(){recordDialog=true;try{using(var dialog=new Form(){Text="Configurações do player",Size=new Size(430,290),StartPosition=FormStartPosition.CenterParent,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false,BackColor=Color.FromArgb(9,27,44),ForeColor=Color.White}){var label=new Label(){Text="Volume",Location=new Point(20,20),AutoSize=true};var slider=new TrackBar(){Minimum=0,Maximum=100,Value=volume.Value,Location=new Point(20,45),Width=360,TickStyle=TickStyle.None};slider.ValueChanged+=(s,e)=>volume.Value=slider.Value;dialog.Controls.Add(label);dialog.Controls.Add(slider);var aspect=PlayerButton("Proporção / zoom",170);aspect.Location=new Point(20,100);aspect.Click+=(s,e)=>CycleAspect();dialog.Controls.Add(aspect);var full=PlayerButton(!cinemaFullscreen?"Tela cheia (Esc sai)":"Sair da tela cheia",180);full.Location=new Point(205,100);full.Click+=(s,e)=>{dialog.Close();ToggleFullscreen();};dialog.Controls.Add(full);var note=new Label(){Text="Atalhos: espaço pausa/continua; ← / → salta 1 minuto; F11 tela cheia.\nA gravação usa uma segunda conexão com o provedor.",Location=new Point(20,155),Size=new Size(365,65)};dialog.Controls.Add(note);dialog.ShowDialog(this);}}finally{recordDialog=false;lastActivity=DateTime.UtcNow;}}
+ async void ShowPlayerSettings() {
+  bool checkUpdate = false;
+  recordDialog = true;
+  try {
+   using (var dialog = new Form {
+    Text = "Configurações do player", ClientSize = new Size(414, 284),
+    StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
+    MaximizeBox = false, MinimizeBox = false, BackColor = Color.FromArgb(9,27,44), ForeColor = Color.White
+   }) {
+    var label = new Label { Text = "Volume", Location = new Point(20,20), AutoSize = true };
+    var slider = new TrackBar { Minimum = 0, Maximum = 100, Value = volume.Value,
+     Location = new Point(20,45), Width = 360, TickStyle = TickStyle.None };
+    slider.ValueChanged += (s,e) => volume.Value = slider.Value;
+    var aspect = PlayerButton("Proporção / zoom",170);
+    aspect.Location = new Point(20,100);
+    aspect.Click += (s,e) => CycleAspect();
+    var full = PlayerButton(cinemaFullscreen ? "Sair da tela cheia" : "Tela cheia (Esc sai)",180);
+    full.Location = new Point(205,100);
+    full.Click += (s,e) => { dialog.Close(); ToggleFullscreen(); };
+    var update = PlayerButton("Verificar atualização",365);
+    update.Location = new Point(20,147);
+    update.Click += (s,e) => { checkUpdate = true; dialog.Close(); };
+    var note = new Label {
+     Text = "Atalhos: espaço pausa/continua; ← / → salta 1 minuto; F11 tela cheia.\nA gravação usa uma segunda conexão com o provedor.",
+     Location = new Point(20,197), Size = new Size(365,65)
+    };
+    dialog.Controls.AddRange(new Control[] { label, slider, aspect, full, update, note });
+    dialog.ShowDialog(this);
+   }
+  } finally {
+   recordDialog = false;
+   lastActivity = DateTime.UtcNow;
+  }
+  if (checkUpdate) await CheckForProgramUpdate(true);
+ }
+
  void ReturnFromPlayer(){if(recorder!=null&&!FinishRecording())return;if(cinemaFullscreen)ExitFullscreen();StopPlayback();if(playerReturnPage==detailsScreen&&detailEntry!=null){RenderDetails(detailEntry);ChangePage(detailsScreen,()=>AttachHome(detailsScreen));}else ShowBrowser();if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;Activate();Focus();}
  void StopPlayback(){if(recorder!=null)FinishRecording();if(engine!=null)engine.Stop();HideOverlays();if(mediaTitle!=null)mediaTitle.Text="Selecione um canal, filme ou episódio";}
  FormWindowState beforeFullscreenState;

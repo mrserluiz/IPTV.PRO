@@ -216,7 +216,11 @@ public partial class XCIPTVPC
 
     async Task CheckForProgramUpdate(bool manual)
     {
-        if (checkingUpdate) return;
+        if (checkingUpdate)
+        {
+            if (manual) MessageBox.Show(this, "Já existe uma atualização em verificação ou aguardando instalação.", "XCIPTV-PC");
+            return;
+        }
         checkingUpdate = true;
         AppUpdater.Package package = null;
         bool handedOff = false;
@@ -230,6 +234,8 @@ public partial class XCIPTVPC
                 return;
             }
             Text = "XCIPTV-PC — versão " + package.Version + " pronta para instalar";
+            if (manual && playbackScreen.Visible)
+                MessageBox.Show(this, "A versão " + package.Version + " está pronta. A instalação começa quando você voltar à lista ou à sinopse.", "XCIPTV-PC");
             while (busy || playbackScreen.Visible || !Enabled || WindowState == FormWindowState.Minimized)
             {
                 await Task.Delay(1000);

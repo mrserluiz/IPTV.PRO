@@ -35,7 +35,22 @@ public class MediaGrid : Panel {
  readonly Dictionary<string,Image> artwork=new Dictionary<string,Image>();readonly Dictionary<string,long> accessed=new Dictionary<string,long>();long accessClock;readonly HashSet<string> pending=new HashSet<string>(),failed=new HashSet<string>();readonly SemaphoreSlim downloads=new SemaphoreSlim(4);bool closing;
  public MediaGrid(){Items=new Collection(this);AutoScroll=false;DoubleBuffered=true;SetStyle(ControlStyles.AllPaintingInWmPaint|ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(9,45,84);TabStop=true;Resize+=(s,e)=>Changed();MouseDown+=(s,e)=>{Focus();SelectAt(e.Location);};KeyDown+=(s,e)=>{int next=selection;if(e.KeyCode==Keys.Right)next++;else if(e.KeyCode==Keys.Left)next--;else if(e.KeyCode==Keys.Down)next+=Columns;else if(e.KeyCode==Keys.Up)next-=Columns;else if(e.KeyCode==Keys.Enter){if(ItemActivated!=null)ItemActivated(this,EventArgs.Empty);e.Handled=true;return;}else return;selection=Math.Max(0,Math.Min(Items.Count-1,next));scrollY=Math.Max(0,Math.Min(MaxScroll,(selection/Columns)*CellHeight));Invalidate();e.Handled=true;};}
  public Entry SelectAt(Point point){int col=point.X/CellWidth,row=(point.Y+scrollY)/CellHeight;int index=row*Columns+col;selection=point.X>=0&&point.Y>=0&&col<Columns&&index>=0&&index<Items.Count?index:-1;Invalidate();return SelectedItem as Entry;}
- int Columns{get{return Math.Max(1,ClientSize.Width/170);}}int CellWidth{get{return Math.Max(150,ClientSize.Width/Columns);}}const int CellHeight=214;
+ bool largeCards;
+ internal bool LargeCards {
+  get { return largeCards; }
+  set {
+   if (largeCards == value) return;
+   int firstItem = scrollY / CellHeight * Columns;
+   largeCards = value;
+   scrollY = firstItem / Columns * CellHeight;
+   Changed();
+   QueueVisibleArtwork();
+  }
+ }
+ int Columns { get { return Math.Max(1, ClientSize.Width / (largeCards ? 245 : 170)); } }
+ int CellWidth { get { return Math.Max(1, ClientSize.Width / Columns); } }
+ int CellHeight { get { return largeCards ? 302 : 214; } }
+ int ArtworkHeight { get { return largeCards ? 231 : 143; } }
  internal int ScrollOffset{get{return scrollY;}}
  public void ScrollToStart(){scrollY=0;selection=-1;QueueVisibleArtwork();Invalidate();}
  public void BeginUpdate(){suspended++;}public void EndUpdate(){suspended=Math.Max(0,suspended-1);Changed();}void Changed(){if(suspended>0)return;scrollY=Math.Min(scrollY,MaxScroll);Invalidate();}
@@ -44,9 +59,9 @@ public class MediaGrid : Panel {
  protected override void OnMouseWheel(MouseEventArgs e){ScrollWheel(e.Delta);base.OnMouseWheel(e);}
  protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);int first=Math.Max(0,scrollY/CellHeight);int last=Math.Min((Items.Count+Columns-1)/Columns,first+ClientSize.Height/CellHeight+2);
   for(int row=first;row<last;row++)for(int col=0;col<Columns;col++){int index=row*Columns+col;if(index>=Items.Count)break;var entry=Items[index] as Entry;if(entry==null)continue;var rect=new Rectangle(col*CellWidth+6,row*CellHeight-scrollY+6,CellWidth-12,CellHeight-12);using(var fill=new SolidBrush(index==selection?Color.FromArgb(20,95,147):Color.FromArgb(17,26,35)))e.Graphics.FillRectangle(fill,rect);using(var border=new Pen(index==selection?Color.Gold:Color.FromArgb(50,88,118),index==selection?2:1))e.Graphics.DrawRectangle(border,rect);
-   var picture=new Rectangle(rect.X+3,rect.Y+3,rect.Width-6,143);Image art=null;if(!string.IsNullOrEmpty(entry.Icon)){if(!artwork.TryGetValue(entry.Icon,out art))RequestArtwork(entry.Icon);else accessed[entry.Icon]=++accessClock;}if(art==null)art=DefaultArtwork;
+   var picture=new Rectangle(rect.X+3,rect.Y+3,rect.Width-6,ArtworkHeight);Image art=null;if(!string.IsNullOrEmpty(entry.Icon)){if(!artwork.TryGetValue(entry.Icon,out art))RequestArtwork(entry.Icon);else accessed[entry.Icon]=++accessClock;}if(art==null)art=DefaultArtwork;
    if(art!=null){float scale=Math.Min((float)picture.Width/art.Width,(float)picture.Height/art.Height);int w=(int)(art.Width*scale),h=(int)(art.Height*scale);e.Graphics.DrawImage(art,picture.X+(picture.Width-w)/2,picture.Y+(picture.Height-h)/2,w,h);}else TextRenderer.DrawText(e.Graphics,"▶",Font,picture,Color.LightBlue,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
-   TextRenderer.DrawText(e.Graphics,entry.Name,Font,new Rectangle(rect.X+5,rect.Y+151,rect.Width-10,44),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis);
+   TextRenderer.DrawText(e.Graphics,entry.Name,Font,new Rectangle(rect.X+5,rect.Y+ArtworkHeight+8,rect.Width-10,44),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis);
   }
   if(Items.Count==0)TextRenderer.DrawText(e.Graphics,"Nenhum item nesta seleção",Font,ClientRectangle,Color.LightBlue,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
  }

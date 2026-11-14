@@ -14,6 +14,14 @@ public sealed class MediaDetails {
 }
 public class FloatingPanel : Form {
  public FloatingPanel(){FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(9,16,23);ForeColor=Color.FromArgb(210,239,247);Opacity=.94;}
+ internal Func<int, bool> MediaCommand;
+ protected override void WndProc(ref Message message) {
+  if (message.Msg == 0x0319 && MediaCommand != null && MediaCommand((int)((message.LParam.ToInt64() >> 16) & 0xfff))) {
+   message.Result = new IntPtr(1);
+   return;
+  }
+  base.WndProc(ref message);
+ }
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
 }
@@ -54,6 +62,7 @@ public partial class XCIPTVPC {
  bool borderlessPlayerWindow;
  bool Immersive{get{return cinemaFullscreen||WindowState==FormWindowState.Maximized;}}
  void BuildCinema(){KeyPreview=true;InitializeNavigation();
+  Shown += (sender,args) => InstallPlayerRemoteHook();
   detailsScreen=new BufferedPage(){Dock=DockStyle.Fill,Visible=false,BackgroundImageLayout=ImageLayout.Stretch,BackColor=Color.FromArgb(13,25,34)};Controls.Add(detailsScreen);
   detailsCover=new PictureBox(){SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.Transparent};detailsScreen.Controls.Add(detailsCover);
   detailsName=DetailLabel(28,Color.White);detailsRating=DetailLabel(16,Color.Gold);detailsDate=DetailLabel(13,Color.LightBlue);detailsGenre=DetailLabel(14,Color.White);detailsCast=DetailLabel(12,Color.YellowGreen);detailsPlot=DetailLabel(14,Color.White);detailsDirector=DetailLabel(13,Color.LightSteelBlue);
@@ -123,7 +132,7 @@ public partial class XCIPTVPC {
  void BuildPlayer(TableLayoutPanel root){
   videoSplit=new SplitContainer(){Dock=DockStyle.Fill,Size=new Size(960,420),SplitterDistance=280,Panel1MinSize=160,Panel2MinSize=320,BackColor=Color.FromArgb(8,38,79)};videoSplit.Panel1.Controls.Add(items);root.Controls.Add(videoSplit);
   playerPane=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Black};videoSplit.Panel2.Controls.Add(playerPane);videoSurface=new Panel(){Dock=DockStyle.Fill,BackColor=Color.Black};videoSurface.HandleCreated+=(s,e)=>{if(engine!=null)engine.SetWindow(videoSurface.Handle);};playerPane.Controls.Add(videoSurface);
-  mediaTitle=new Label();overlay=new FloatingPanel();var layout=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(10)};layout.RowStyles.Add(new RowStyle(SizeType.Absolute,34));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,66));overlay.Controls.Add(layout);
+  mediaTitle=new Label();overlay=new FloatingPanel();overlay.MediaCommand=ForwardPlayerMediaCommand;var layout=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(10)};layout.RowStyles.Add(new RowStyle(SizeType.Absolute,34));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,66));overlay.Controls.Add(layout);
   var progress=new TableLayoutPanel(){Dock=DockStyle.Fill,ColumnCount=3};progress.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,82));progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));progress.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,95));layout.Controls.Add(progress);
   playbackTime=new Label(){Font=new Font("Segoe UI",11),Text="00:00:00",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,ForeColor=Color.LightCyan};progress.Controls.Add(playbackTime);
   seek=new TimelineBar(){Dock=DockStyle.Fill,Minimum=0,Maximum=1000,TickStyle=TickStyle.None,Enabled=false,Margin=Padding.Empty};seek.MouseDown+=(s,e)=>seeking=true;seek.MouseUp+=(s,e)=>{if(engine!=null&&engine.Seekable&&recorder==null)engine.Position=seek.Value/1000f;seeking=false;};progress.Controls.Add(seek);
@@ -134,7 +143,7 @@ public partial class XCIPTVPC {
   fullscreenButton=MakeGlyph("fullscreen","Tela cheia / modo janela (F11)",ToggleFullscreen);
   monitorButton=MakeGlyph("monitor","Mover para outro monitor",MovePlayerToNextMonitor);
   controls.Controls.AddRange(new Control[]{fullscreenButton,monitorButton,recordButton,muteButton,settingsButton,subtitleButton,aspectButton,jumpForward,pauseButton,jumpBack});var volumePanel=new FlowLayoutPanel(){Width=160,Height=54,WrapContents=false,Margin=new Padding(3)};var speaker=MakeGlyph("speaker","Regular volume",()=>volume.Focus());speaker.Width=40;speaker.Height=46;speaker.Margin=Padding.Empty;volumePanel.Controls.Add(speaker);volume=new TrackBar(){Minimum=0,Maximum=100,Value=80,Width=110,Height=45,TickStyle=TickStyle.None,Margin=new Padding(0,9,0,0),AccessibleName="Regular volume"};volumePanel.Controls.Add(volume);controls.Controls.Add(volumePanel);volume.ValueChanged+=(s,e)=>{if(engine!=null)engine.Volume(volume.Value);};
-  playerBack=new FloatingPanel(){Size=new Size(150,60)};var goBack=MakeGlyph("back","Voltar à sinopse ou à lista",()=>ReturnFromPlayer());goBack.Dock=DockStyle.Left;var goHome=new HomeButton(){Dock=DockStyle.Right};goHome.Click+=(s,e)=>ShowHome();playerBack.Controls.Add(goBack);playerBack.Controls.Add(goHome);
+  playerBack=new FloatingPanel(){Size=new Size(150,60),MediaCommand=ForwardPlayerMediaCommand};var goBack=MakeGlyph("back","Voltar à sinopse ou à lista",()=>ReturnFromPlayer());goBack.Dock=DockStyle.Left;var goHome=new HomeButton(){Dock=DockStyle.Right};goHome.Click+=(s,e)=>ShowHome();playerBack.Controls.Add(goBack);playerBack.Controls.Add(goHome);
   playbackTimer=new System.Windows.Forms.Timer(){Interval=400};playbackTimer.Tick+=(s,e)=>UpdatePlayback();playbackTimer.Start();
  }
  GlyphButton MakeGlyph(string glyph,string name,Action action){var button=new GlyphButton(glyph,name);buttonHints.SetToolTip(button,name);button.Click+=(s,e)=>{lastActivity=DateTime.UtcNow;action();};return button;}
@@ -483,15 +492,61 @@ public partial class XCIPTVPC {
   return true;
  }
 
- protected override bool ProcessCmdKey(ref Message message, Keys keyData) {
-  RemoteDirection remote = RemoteDirection.None;
-  switch (keyData) {
-   case Keys.MediaPreviousTrack: remote = RemoteDirection.Left; break;
-   case Keys.MediaNextTrack: remote = RemoteDirection.Right; break;
-   case Keys.VolumeUp: remote = RemoteDirection.Up; break;
-   case Keys.VolumeDown: remote = RemoteDirection.Down; break;
-   case Keys.MediaPlayPause: remote = RemoteDirection.Confirm; break;
+ bool ForwardPlayerMediaCommand(int command) {
+  return ApplicationForeground() && HandleRemote(RemoteMediaCommand(command));
+ }
+
+ static RemoteDirection RemoteKey(Keys key) {
+  switch (key) {
+   case Keys.MediaPreviousTrack: return RemoteDirection.Left;
+   case Keys.MediaNextTrack: return RemoteDirection.Right;
+   case Keys.VolumeUp: return RemoteDirection.Up;
+   case Keys.VolumeDown: return RemoteDirection.Down;
+   case Keys.MediaPlayPause: return RemoteDirection.Confirm;
+   default: return RemoteDirection.None;
   }
+ }
+
+ delegate IntPtr PlayerKeyboardHook(int code, IntPtr message, IntPtr data);
+ [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError=true)]
+ static extern IntPtr SetWindowsHookEx(int id, PlayerKeyboardHook callback, IntPtr module, uint thread);
+ [System.Runtime.InteropServices.DllImport("user32.dll")]
+ static extern bool UnhookWindowsHookEx(IntPtr hook);
+ [System.Runtime.InteropServices.DllImport("user32.dll")]
+ static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr message, IntPtr data);
+ [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
+ static extern IntPtr GetModuleHandle(string name);
+ IntPtr playerRemoteHook;
+ PlayerKeyboardHook playerRemoteCallback;
+ readonly HashSet<Keys> capturedMediaKeys = new HashSet<Keys>();
+
+ void InstallPlayerRemoteHook() {
+  playerRemoteCallback = RoutePlayerMediaKey;
+  playerRemoteHook = SetWindowsHookEx(13, playerRemoteCallback, GetModuleHandle(null), 0);
+ }
+
+ IntPtr RoutePlayerMediaKey(int code, IntPtr message, IntPtr data) {
+  if (code >= 0) {
+   var key = (Keys)System.Runtime.InteropServices.Marshal.ReadInt32(data);
+   var direction = RemoteKey(key);
+   if (direction != RemoteDirection.None) {
+    int eventType = message.ToInt32();
+    if ((eventType == 0x101 || eventType == 0x105) && capturedMediaKeys.Remove(key)) return new IntPtr(1);
+    if ((eventType == 0x100 || eventType == 0x104) && playbackScreen.Visible &&
+        Enabled && !recordDialog && !closingCinema && ApplicationForeground()) {
+     if (capturedMediaKeys.Add(key) || direction != RemoteDirection.Confirm)
+      BeginInvoke(new Action(() => {
+       if (playbackScreen.Visible && ApplicationForeground()) HandleRemote(direction);
+      }));
+     return new IntPtr(1);
+    }
+   }
+  }
+  return CallNextHookEx(playerRemoteHook, code, message, data);
+ }
+
+ protected override bool ProcessCmdKey(ref Message message, Keys keyData) {
+  RemoteDirection remote = RemoteKey(keyData);
   if (HandleRemote(remote)) return true;
   if (keyData == Keys.F11 || (keyData == Keys.Escape && cinemaFullscreen)) {
    ToggleFullscreen();
@@ -504,7 +559,7 @@ public partial class XCIPTVPC {
  bool FinishRecording(){if(recorder==null)return true;if(recordDialog)return false;recordDialog=true;try{recorder.Stop();recorder.Dispose();recorder=null;if(engine!=null)engine.Pause(true);if(!File.Exists(recordPath)||new FileInfo(recordPath).Length<188){MessageBox.Show(this,"Nenhum trecho válido foi recebido. O provedor pode limitar conexões ou o formato pode não permitir gravação.","Gravação");DiscardRecording();return true;}if(MessageBox.Show(this,"Deseja salvar o trecho gravado?","Salvar gravação",MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes){using(var dialog=new SaveFileDialog(){Title="Salvar trecho gravado",InitialDirectory=Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),Filter="Vídeo MPEG-TS (*.ts)|*.ts",DefaultExt="ts",AddExtension=true,FileName=SafeFileName(currentMedia==null?"Trecho":currentMedia.Name)+" - "+DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss")+".ts"}){if(dialog.ShowDialog(this)==DialogResult.OK){File.Copy(recordPath,dialog.FileName,true);MessageBox.Show(this,"Trecho salvo.","Gravação");}}}DiscardRecording();return true;}catch{MessageBox.Show(this,"Não foi possível salvar. O trecho temporário será mantido em:\n"+recordPath,"Gravação");return false;}finally{recordDialog=false;lastActivity=DateTime.UtcNow;}}
  static string SafeFileName(string name){foreach(char c in Path.GetInvalidFileNameChars())name=name.Replace(c,'_');return name.Length>100?name.Substring(0,100):name;}
  void DiscardRecording(){if(recorder!=null){recorder.Dispose();recorder=null;}try{if(recordPath!=null&&File.Exists(recordPath))File.Delete(recordPath);}catch{}recordPath=null;}
- void CloseCinema(){SetPlayerCursorHidden(false);if(recorder!=null)FinishRecording();if(wheelRouter!=null)wheelRouter.Dispose();closingCinema=true;if(cinemaTimer!=null)cinemaTimer.Dispose();if(overlay!=null)overlay.Dispose();if(playerBack!=null)playerBack.Dispose();scrollHint.Dispose();buttonHints.Dispose();}
+ void CloseCinema(){if(playerRemoteHook!=IntPtr.Zero){UnhookWindowsHookEx(playerRemoteHook);playerRemoteHook=IntPtr.Zero;}SetPlayerCursorHidden(false);if(recorder!=null)FinishRecording();if(wheelRouter!=null)wheelRouter.Dispose();closingCinema=true;if(cinemaTimer!=null)cinemaTimer.Dispose();if(overlay!=null)overlay.Dispose();if(playerBack!=null)playerBack.Dispose();scrollHint.Dispose();buttonHints.Dispose();}
  [System.Runtime.InteropServices.DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr hwnd,int attribute,ref int value,int size);
  void DisableWindowAnimations(){try{int disabled=1;DwmSetWindowAttribute(Handle,3,ref disabled,4);}catch{}}
  int sceneUpdateDepth;
@@ -556,9 +611,16 @@ public partial class XCIPTVPC {
  void InputRegressionTest(){FavoriteNavigationTest();
   ShowBrowser();categorySide.BeginUpdate();categorySide.Items.Clear();for(int i=0;i<100;i++)categorySide.Items.Add("Gênero "+i);categorySide.EndUpdate();search.Focus();var point=categorySide.PointToScreen(new Point(20,40));if(!wheelRouter.Route(point,-120)||categorySide.TopIndex==0)throw new Exception("Unfocused category wheel failed");Application.DoEvents();if(categorySide.TopIndex==0)throw new Exception("Category wheel was reset");wheelRouter.Route(point,120);if(categorySide.TopIndex!=0)throw new Exception("Category reverse wheel failed");items.CacheStabilityTest();TestTrace("wheel and visible cover cache passed");
  }
+ [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint="SendMessageW")]
+ static extern IntPtr SendRemoteMessage(IntPtr target, int message, IntPtr wParam, IntPtr lParam);
+ void SendRemoteTestCommand(int command) {
+  if (SendRemoteMessage(overlay.Handle, 0x0319, overlay.Handle, new IntPtr(command << 16)) != new IntPtr(1))
+   throw new Exception("Player overlay did not handle remote command");
+ }
+
  static void WaitUi(int milliseconds){var until=DateTime.UtcNow.AddMilliseconds(milliseconds);while(DateTime.UtcNow<until){Application.DoEvents();System.Threading.Thread.Sleep(15);}}
  public static void InputPlaybackTest(string executable){string path=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N")+".avi");try{EmbeddedVlc.WriteVideo(path,160);using(var window=new XCIPTVPC()){
-  window.Show();window.Activate();window.ShowHome();window.homeFullscreenButton.PerformClick();window.ShowPlayback();window.engine=new EmbeddedVlc(executable,true);window.engine.SetWindow(window.videoSurface.Handle);window.engine.Play(new Uri(path).AbsoluteUri);for(int i=0;i<80&&window.engine.Time<100;i++)WaitUi(100);if(window.engine.State!=3)throw new Exception("Input test playback failed");WaitUi(100);if(!window.cinemaFullscreen||!window.overlay.Visible||!window.overlay.TopMost)throw new Exception("Home fullscreen player controls missing");var buttonPoint=window.fullscreenButton.PointToScreen(new Point(window.fullscreenButton.Width/2,window.fullscreenButton.Height/2));var buttonHit=NativePointer.WindowAt(buttonPoint);if(buttonHit!=window.fullscreenButton.Handle&&!NativePointer.Child(window.overlay.Handle,buttonHit))throw new Exception("Fullscreen controls are behind video");var surface=window.videoSurface.RectangleToScreen(window.videoSurface.ClientRectangle);var point=new Point(surface.Left+surface.Width/2,surface.Top+surface.Height/3);Cursor.Position=point;WaitUi(100);if(!window.VideoHit(point))throw new Exception("Native video hit-test failed");if(!window.ApplicationForeground())throw new Exception("Native foreground detection failed");window.lastPointer=point;window.lastActivity=DateTime.UtcNow.AddSeconds(-5);window.RefreshOverlays();if(window.overlay.Visible)throw new Exception("Input test idle controls did not hide");Cursor.Position=new Point(point.X+30,point.Y);for(int i=0;i<10&&!window.overlay.Visible;i++)WaitUi(100);if(!window.overlay.Visible)throw new Exception("Real pointer did not restore controls: foreground="+window.ApplicationForeground()+" pointer="+Cursor.Position+" last="+window.lastPointer+" enabled="+window.Enabled+" idle="+window.chromeHidden);NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=4)throw new Exception("Native video click did not pause");NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=3)throw new Exception("Native video click did not resume");window.ExitFullscreen();window.WindowState=FormWindowState.Maximized;WaitUi(100);TestTrace("pointer pause/resume passed; checking same-window fullscreen return");var mainHandle=window.Handle;var previousState=window.WindowState;window.ToggleFullscreen();window.ReturnFromPlayer();if(!window.cinemaFullscreen)throw new Exception("Fullscreen lost during navigation");window.ExitFullscreen();WaitUi(120);TestTrace("return: old HWND="+mainHandle+" current="+window.Handle+" state="+window.WindowState+" expected="+previousState+" visible="+window.Visible+" catalog="+window.catalog.Visible);if(window.cinemaFullscreen||!window.Visible||window.WindowState!=previousState||!window.catalog.Visible)throw new Exception("Player return changed or minimized main window");TestTrace("same-window return passed; checking live autoplay");window.kind="live";window.guideMode=false;window.entries=new List<Entry>{new Entry(){Id="local-live",Name="Canal local de teste",Url=new Uri(path).AbsoluteUri}};window.category.Items.Clear();window.category.Items.Add(new Entry(){Id="",Name="Todos"});window.category.SelectedIndex=0;window.Filter();window.vlc=executable;Cursor.Position=window.items.PointToScreen(new Point(50,50));NativePointer.TestButton(true);WaitUi(90);NativePointer.TestButton(false);WaitUi(450);for(int i=0;i<30&&window.engine.State!=3;i++)WaitUi(100);TestTrace("live: state="+window.engine.State+" page="+window.playbackScreen.Visible+" selected="+(window.items.SelectedItem!=null)+" current="+(window.currentMedia==null?"none":window.currentMedia.Id));if(!window.playbackScreen.Visible||window.engine.State!=3||window.currentMedia==null||window.currentMedia.Id!="local-live")throw new Exception("Single click live autoplay failed");window.ReturnFromPlayer();if(!window.catalog.Visible||window.WindowState!=previousState)throw new Exception("Live return failed");window.Close();
+  window.Show();window.Activate();window.ShowHome();window.homeFullscreenButton.PerformClick();window.ShowPlayback();window.engine=new EmbeddedVlc(executable,true);window.engine.SetWindow(window.videoSurface.Handle);window.engine.Play(new Uri(path).AbsoluteUri);for(int i=0;i<80&&window.engine.Time<100;i++)WaitUi(100);if(window.engine.State!=3)throw new Exception("Input test playback failed");WaitUi(100);if(!window.cinemaFullscreen||!window.overlay.Visible||!window.overlay.TopMost)throw new Exception("Home fullscreen player controls missing");var buttonPoint=window.fullscreenButton.PointToScreen(new Point(window.fullscreenButton.Width/2,window.fullscreenButton.Height/2));var buttonHit=NativePointer.WindowAt(buttonPoint);if(buttonHit!=window.fullscreenButton.Handle&&!NativePointer.Child(window.overlay.Handle,buttonHit))throw new Exception("Fullscreen controls are behind video");var surface=window.videoSurface.RectangleToScreen(window.videoSurface.ClientRectangle);var point=new Point(surface.Left+surface.Width/2,surface.Top+surface.Height/3);Cursor.Position=point;WaitUi(100);if(!window.VideoHit(point))throw new Exception("Native video hit-test failed");if(!window.ApplicationForeground())throw new Exception("Native foreground detection failed");window.lastPointer=point;window.lastActivity=DateTime.UtcNow.AddSeconds(-5);window.RefreshOverlays();if(window.overlay.Visible)throw new Exception("Input test idle controls did not hide");Cursor.Position=new Point(point.X+30,point.Y);for(int i=0;i<10&&!window.overlay.Visible;i++)WaitUi(100);if(!window.overlay.Visible)throw new Exception("Real pointer did not restore controls: foreground="+window.ApplicationForeground()+" pointer="+Cursor.Position+" last="+window.lastPointer+" enabled="+window.Enabled+" idle="+window.chromeHidden);NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=4)throw new Exception("Native video click did not pause");NativePointer.TestButton(true);WaitUi(100);NativePointer.TestButton(false);WaitUi(220);if(window.engine.State!=3)throw new Exception("Native video click did not resume");window.SelectRemoteControl(window.pauseButton);window.SendRemoteTestCommand(10);if(window.remoteButton==window.pauseButton)throw new Exception("Remote player navigation did not move");window.SelectRemoteControl(window.pauseButton);window.SendRemoteTestCommand(14);WaitUi(250);if(window.engine.State!=4)throw new Exception("Remote player confirmation did not pause");window.SendRemoteTestCommand(14);WaitUi(250);if(window.engine.State!=3)throw new Exception("Remote player confirmation did not resume");window.ExitFullscreen();window.WindowState=FormWindowState.Maximized;WaitUi(100);TestTrace("pointer pause/resume passed; checking same-window fullscreen return");var mainHandle=window.Handle;var previousState=window.WindowState;window.ToggleFullscreen();window.ReturnFromPlayer();if(!window.cinemaFullscreen)throw new Exception("Fullscreen lost during navigation");window.ExitFullscreen();WaitUi(120);TestTrace("return: old HWND="+mainHandle+" current="+window.Handle+" state="+window.WindowState+" expected="+previousState+" visible="+window.Visible+" catalog="+window.catalog.Visible);if(window.cinemaFullscreen||!window.Visible||window.WindowState!=previousState||!window.catalog.Visible)throw new Exception("Player return changed or minimized main window");TestTrace("same-window return passed; checking live autoplay");window.kind="live";window.guideMode=false;window.entries=new List<Entry>{new Entry(){Id="local-live",Name="Canal local de teste",Url=new Uri(path).AbsoluteUri}};window.category.Items.Clear();window.category.Items.Add(new Entry(){Id="",Name="Todos"});window.category.SelectedIndex=0;window.Filter();window.vlc=executable;Cursor.Position=window.items.PointToScreen(new Point(50,50));NativePointer.TestButton(true);WaitUi(90);NativePointer.TestButton(false);WaitUi(450);for(int i=0;i<30&&window.engine.State!=3;i++)WaitUi(100);TestTrace("live: state="+window.engine.State+" page="+window.playbackScreen.Visible+" selected="+(window.items.SelectedItem!=null)+" current="+(window.currentMedia==null?"none":window.currentMedia.Id));if(!window.playbackScreen.Visible||window.engine.State!=3||window.currentMedia==null||window.currentMedia.Id!="local-live")throw new Exception("Single click live autoplay failed");window.ReturnFromPlayer();if(!window.catalog.Visible||window.WindowState!=previousState)throw new Exception("Live return failed");window.Close();
  }}finally{NativePointer.TestButton(false);if(File.Exists(path))File.Delete(path);}}
  static void TestTrace(string value){if(Environment.GetCommandLineArgs().Any(x=>x=="--smoke-test"||x=="--input-test"))File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-trace.txt"),value+Environment.NewLine);}
  void CinemaLayoutTest(){InputRegressionTest();TestTrace("cinema layout");if(seek.Width<200)throw new Exception("Timeline width invalid");var sample=new Entry(){Name="Filme de demonstração (2026)",Details=new MediaDetails(){Plot="Descrição do conteúdo fornecida pelo catálogo. Elenco, gênero, classificação e data aparecem antes de reproduzir.",Rating="7",Genre="Drama",Date="2026-11-02",Cast="Elenco de demonstração",Director="Direção de demonstração"}};HidePages();detailsScreen.Visible=true;detailsScreen.BringToFront();detailEntry=sample;detailsCover.Image=logoImage;RenderDetails(sample);AttachHome(detailsScreen);Snapshot("synopsis");if(detailsBack.Top<=detailsPlay.Top||detailsCover.Width<150)throw new Exception("Synopsis controls invalid");ShowPlayback();playingMetadata.Text=sample.Name+Environment.NewLine+sample.Details.Summary;RefreshOverlays();if(!overlay.Visible)throw new Exception("Overlay missing");using(var bitmap=new Bitmap(overlay.Width,overlay.Height)){overlay.DrawToBitmap(bitmap,new Rectangle(0,0,bitmap.Width,bitmap.Height));bitmap.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"ui-previews","controls.png"));}TestTrace("fullscreen");var monitor=CurrentMonitorBounds();var original=Bounds;var originalBorder=FormBorderStyle;var originalTopMost=TopMost;ToggleFullscreen();PerformLayout();if(!cinemaFullscreen||FormBorderStyle!=FormBorderStyle.None||!TopMost||videoSurface.RectangleToScreen(videoSurface.ClientRectangle)!=monitor)throw new Exception("Fullscreen video does not cover the monitor");RefreshOverlays();if(!overlay.Visible||!fullscreenButton.Visible||!monitorButton.Visible)throw new Exception("Fullscreen controls missing");lastActivity=DateTime.UtcNow.AddSeconds(-5);Cursor.Position=new Point(monitor.Left+monitor.Width/2,monitor.Top+monitor.Height/2);RefreshOverlays();if(overlay.Visible)throw new Exception("Fullscreen controls did not hide");var destination=new Rectangle(-1280,0,1280,680);if(!destination.Contains(MoveWindowBounds(new Rectangle(900,600,1000,740),new Rectangle(0,0,1920,1040),destination)))throw new Exception("Monitor transfer geometry invalid");ExitFullscreen();if(Bounds!=original||FormBorderStyle!=originalBorder||TopMost!=originalTopMost)throw new Exception("Original window was not restored");ReturnFromPlayer();if(!detailsScreen.Visible||WindowState==FormWindowState.Minimized)throw new Exception("Synopsis back navigation failed");ToggleFullscreen();ShowHome();if(!cinemaFullscreen||FormBorderStyle!=FormBorderStyle.None)throw new Exception("App fullscreen lost on home navigation");ExitFullscreen();detailsEpoch++;}

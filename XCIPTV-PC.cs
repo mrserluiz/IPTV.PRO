@@ -39,7 +39,7 @@ public partial class XCIPTVPC : Form {
  HashSet<string> favorites=new HashSet<string>();
  string dataDir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"EtherPlayer");
  public XCIPTVPC(){TestTrace("constructor");
-  Text="XCIPTV-PC — Windows • prévia 0.2.3"; Width=1100;Height=740;MinimumSize=new Size(850,600);
+  Text="XCIPTV-PC — Windows " + AppUpdater.CurrentVersion.ToString(3); Width=1100;Height=740;MinimumSize=new Size(850,600);
   DoubleBuffered=true;AutoScaleMode=AutoScaleMode.Dpi;StartPosition=FormStartPosition.CenterScreen;
   BackgroundImage=Asset("Background");BackgroundImageLayout=ImageLayout.Stretch;logoImage=Asset("Logo");
   using(var iconStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon")){if(iconStream!=null)Icon=new Icon(iconStream);}
@@ -64,7 +64,12 @@ public partial class XCIPTVPC : Form {
   TestTrace("login");BuildLogin();BuildLoading();TestTrace("navigation");BuildNavigation();TestTrace("cinema");BuildCinema();ShowLogin();TestTrace("ready");Resize+=(sender,eventArgs)=>CenterScreens();Shown+=(sender,eventArgs)=>CenterScreens();
   Directory.CreateDirectory(dataDir);var fav=Path.Combine(dataDir,"favorites.txt");if(File.Exists(fav))favorites=new HashSet<string>(File.ReadAllLines(fav));
   LoadPreferences();LoadSession();vlc=FindVlc(vlc);FormClosing+=(sender,eventArgs)=>{SavePreferences();if(cinemaFullscreen)ExitFullscreen();CloseCinema();if(playbackTimer!=null){playbackTimer.Stop();playbackTimer.Dispose();}if(engine!=null){engine.Dispose();engine=null;}};
-  Shown+=async(sender,eventArgs)=>{if(automaticLogin&&!Environment.GetCommandLineArgs().Any(x=>x.StartsWith("--")))await Connect();};
+  Shown+=async(sender,eventArgs)=>{
+   var args=Environment.GetCommandLineArgs();
+   if(args.Length==3&&args[1]=="--update-cleanup")await AppUpdater.Cleanup(args[2]);
+   else if(args.Length==1)await CheckForProgramUpdate(false);
+  };
+  Shown+=async(sender,eventArgs)=>{if(automaticLogin&&(Environment.GetCommandLineArgs().Length==1||Environment.GetCommandLineArgs()[1]=="--update-cleanup"))await Connect();};
  }
  static Image Asset(string name){using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(stream==null)throw new InvalidOperationException("Recurso visual ausente: "+name);using(var image=Image.FromStream(stream))return new Bitmap(image);}}
  Panel Field(TextBox input,string placeholder,int symbol,bool reveal){
@@ -130,6 +135,7 @@ public partial class XCIPTVPC : Form {
   var tiles=new FlowLayoutPanel(){Size=new Size(840,210),BackColor=Color.Transparent,WrapContents=false};string[] captions={"TV AO VIVO","GUIA DA TV","FILMES","SÉRIES"};for(int i=0;i<4;i++){int chosen=i;var tile=new HomeTile(captions[i],i){Size=new Size(190,190),Margin=new Padding(10)};tile.Click+=async(sender,eventArgs)=>await OpenSection(chosen==2?1:chosen==3?2:0,chosen==1);tiles.Controls.Add(tile);}homeScreen.Controls.Add(tiles);
   var footer=new FlowLayoutPanel(){Dock=DockStyle.Bottom,Height=100,Padding=new Padding(20,16,20,8),WrapContents=false,AutoScroll=true};
   var account=PlayerButton("Conta / sair",130);account.Click+=(sender,eventArgs)=>{if(host==null){ShowLogin();return;}if(MessageBox.Show("Sair da conta e remover o login automático salvo?","XCIPTV-PC",MessageBoxButtons.YesNo)==DialogResult.Yes){host=null;password=null;catalogs.Clear();ForgetSession();pass.Clear();entries.Clear();items.Items.Clear();ShowLogin();}};footer.Controls.Add(account);
+  var programUpdate=PlayerButton("Atualizar programa",150);programUpdate.Click+=async(sender,eventArgs)=>await CheckForProgramUpdate(true);footer.Controls.Add(programUpdate);
   var update=PlayerButton("Atualizar listas",135);update.Click+=async(sender,eventArgs)=>{catalogs.Clear();await RefreshCatalogs();};footer.Controls.Add(update);
   var config=PlayerButton("Configurar VLC",135);config.Click+=(sender,eventArgs)=>SelectVlc();footer.Controls.Add(config);
   foreach(string name in new[]{"Multitelas","Catch-up","Gravações"}){var future=PlayerButton(name+" • em breve",145);future.Enabled=false;footer.Controls.Add(future);}homeScreen.Controls.Add(footer);
@@ -267,7 +273,7 @@ public partial class XCIPTVPC : Form {
    }catch(Exception ex){Busy(false,"Falha ao importar lista.");ShowError(ex);}
   }
  }
- [STAThread]public static void Main(string[] args){if(args.Contains("--input-test")){Application.EnableVisualStyles();Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);try{InputPlaybackTest(FindVlc(null));}catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-input-error.txt"),ex.ToString());Environment.Exit(1);}return;}if(args.Contains("--player-test")){string executable=FindVlc(null);if(executable==null)throw new Exception("VLC installation missing for media test");EmbeddedVlc.LocalPlaybackTest(executable);return;}if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();if(args.Contains("--smoke-test")){Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);AppDomain.CurrentDomain.UnhandledException+=(s,e)=>File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),e.ExceptionObject.ToString());}var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),ex.ToString());Environment.Exit(1);}}));Application.Run(window);}
+ [STAThread]public static void Main(string[] args){if(args.Length>0&&args[0]=="--apply-update"){AppUpdater.Apply(args);return;}if(args.Contains("--input-test")){Application.EnableVisualStyles();Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);try{InputPlaybackTest(FindVlc(null));}catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-input-error.txt"),ex.ToString());Environment.Exit(1);}return;}if(args.Contains("--player-test")){string executable=FindVlc(null);if(executable==null)throw new Exception("VLC installation missing for media test");EmbeddedVlc.LocalPlaybackTest(executable);return;}if(args.Contains("--self-test")){SelfTest();return;}ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;Application.EnableVisualStyles();if(args.Contains("--smoke-test")){Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);AppDomain.CurrentDomain.UnhandledException+=(s,e)=>File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),e.ExceptionObject.ToString());}var window=new XCIPTVPC();if(args.Contains("--smoke-test"))window.Shown+=(sender,eventArgs)=>window.BeginInvoke(new Action(()=>{try{window.CheckLayout();window.Close();}catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-error.txt"),ex.ToString());Environment.Exit(1);}}));Application.Run(window);}
 }
 
 

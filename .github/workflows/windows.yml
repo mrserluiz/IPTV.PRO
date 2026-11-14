@@ -24,7 +24,9 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           if (!(Test-Path $compiler)) { throw 'C# compiler not found' }
-          & $compiler /nologo /codepage:65001 /target:winexe /win32icon:assets/app.ico /resource:assets/logo.png,Logo /resource:assets/background.jpg,Background /resource:assets/app.ico,AppIcon /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll /reference:System.Security.dll XCIPTV-PC.cs EmbeddedVlc.cs NavigationUi.cs Cinema.cs
+          $version = "0.2.${{ github.run_number }}.0"
+          Set-Content -Encoding utf8 BuildVersion.cs "[assembly:System.Reflection.AssemblyVersion(`"$version`")]"
+          & $compiler /nologo /codepage:65001 /target:winexe /win32icon:assets/app.ico /resource:assets/logo.png,Logo /resource:assets/background.jpg,Background /resource:assets/app.ico,AppIcon /platform:anycpu /out:dist/XCIPTV-PC.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll /reference:System.Security.dll XCIPTV-PC.cs EmbeddedVlc.cs NavigationUi.cs Cinema.cs Updater.cs BuildVersion.cs
           if ($LASTEXITCODE -ne 0) { throw 'C# compilation failed' }
           Copy-Item LEIA-ME.md,ANALISE_TECNICA.md dist
       - name: Install VLC for local media verification
@@ -49,7 +51,36 @@ jobs:
           $inputTest = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList '--input-test' -PassThru
           if (!$inputTest.WaitForExit(45000)) { $inputTest.Kill(); throw 'Native video input test timed out' }
           if ($inputTest.ExitCode -ne 0) { Get-Content dist/test-*.txt -ErrorAction SilentlyContinue; throw 'Native video mouse and controls test failed' }
-          Get-FileHash dist/XCIPTV-PC.exe -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
+          $hash = Get-FileHash dist/XCIPTV-PC.exe -Algorithm SHA256
+          $hash | Format-List | Out-File dist/SHA256.txt
+          Set-Content -Encoding ascii dist/update.sha256 $hash.Hash
+      - name: Verify portable update and restart
+        shell: pwsh
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP 'XCIPTV update test'
+          New-Item -ItemType Directory -Force $folder | Out-Null
+          $target = Join-Path $folder 'XCIPTV-PC.exe'
+          $stage = Join-Path $folder 'candidate.download'
+          Copy-Item dist/XCIPTV-PC.exe $target
+          $source = Join-Path $folder 'Candidate.cs'
+          @'
+          using System;
+          using System.IO;
+          [assembly:System.Reflection.AssemblyVersion("999.0.0.0")]
+          public static class Candidate {
+            public static void Main() { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "restarted"), "ok"); }
+          }
+          '@ | Set-Content -Encoding utf8 $source
+          $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $compiler /nologo /target:winexe "/out:$stage" $source
+          if ($LASTEXITCODE -ne 0) { throw 'Update fixture compilation failed' }
+          $digest = (Get-FileHash $stage -Algorithm SHA256).Hash
+          $helper = Start-Process (Resolve-Path dist/XCIPTV-PC.exe) -ArgumentList "--apply-update 2147483647 `"$target`" `"$stage`" $digest 999.0.0" -PassThru
+          if (!$helper.WaitForExit(15000)) { $helper.Kill(); throw 'Updater timed out' }
+          if ((Get-FileHash $target -Algorithm SHA256).Hash -ne $digest) { throw 'Executable replacement failed' }
+          $marker = Join-Path $folder 'restarted'
+          for ($i = 0; $i -lt 20 -and !(Test-Path $marker); $i++) { Start-Sleep -Milliseconds 250 }
+          if (!(Test-Path $marker)) { throw 'Updated executable did not restart' }
       - uses: actions/upload-artifact@v4
         with:
           name: XCIPTV-PC-Windows
@@ -71,7 +102,7 @@ jobs:
         run: |
           $tag = "v0.2.${{ github.run_number }}"
           Compress-Archive -Path dist/* -DestinationPath XCIPTV-PC-Windows.zip
-          gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Sinopse com capas e fundo, ícones circulares responsivos, listas sem barras e dica de rolagem. Player flutuante com volume, mudo, legendas, proporção/zoom, saltos de 1 minuto e controles ocultos por inatividade. Gravação de trechos em MPEG-TS com confirmação para salvar em Vídeos; depende de formato e limite de conexões do provedor. Requer VLC 3 instalado. Testes locais de interface, reprodução e gravação no Windows.'
+          gh release create $tag dist/XCIPTV-PC.exe XCIPTV-PC-Windows.zip dist/SHA256.txt dist/update.sha256 --target '${{ github.sha }}' --title "XCIPTV-PC Windows $tag" --prerelease --notes 'Sinopse com capas e fundo, ícones circulares responsivos, listas sem barras e dica de rolagem. Player flutuante com volume, mudo, legendas, proporção/zoom, saltos de 1 minuto e controles ocultos por inatividade. Gravação de trechos em MPEG-TS com confirmação para salvar em Vídeos; depende de formato e limite de conexões do provedor. Requer VLC 3 instalado. Testes locais de interface, reprodução e gravação no Windows.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; executable remains in workflow artifacts' }
 
 
